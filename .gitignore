@@ -1,0 +1,11 @@
+build
+data
+*.py
+*.txt
+*.onnx
+.vscode
+*.rar
+MNIST
+*.engine
+lib
+*ORBSLAMREAD*
