@@ -235,7 +235,7 @@ std::unordered_map<std::string, void *> TRTInfer::infer(const std::unordered_map
         size_t datasize = output_size[names];
         void *value_ptr = (void *)new char[datasize];
         output_blob[names] = value_ptr;
-        auto &iter = outputBindings.find(names);
+        const auto &iter = outputBindings.find(names);
         if (iter != inputBindings.end())
         {
             cudaError_t err = cudaMemcpyAsync(value_ptr, iter->second, datasize, cudaMemcpyDeviceToHost);
@@ -300,7 +300,7 @@ std::unordered_map<std::string, cv::Mat> TRTInfer::infer(const std::unordered_ma
             utilty::typeRt2Cv(engine->getTensorDataType(names.c_str()))
             );
         output_blob[names] = output;
-        auto &iter = outputBindings.find(names);
+        const auto &iter = outputBindings.find(names);
         if (iter != inputBindings.end())
         {
             cudaError_t err = cudaMemcpyAsync(output.data, iter->second, datasize, cudaMemcpyDeviceToHost);
