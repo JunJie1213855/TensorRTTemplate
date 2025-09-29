@@ -7,12 +7,6 @@ namespace FCN
     {
         cv::Mat imgc = img.clone();
 
-        // Resize to target size (256, 256) as specified in config
-        if (imgc.size() != cv::Size(256, 256))
-        {
-            cv::resize(imgc, imgc, cv::Size(256, 256));
-        }
-
         // Convert BGR to RGB as specified in config (bgr_to_rgb=True)
         cv::Mat rgb_img;
         cv::cvtColor(imgc, rgb_img, cv::COLOR_BGR2RGB);
