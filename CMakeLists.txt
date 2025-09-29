@@ -15,6 +15,13 @@ set(CUDA_INCLUDE_DIR "E:/lib/cudalib-11.8/development/include")
 file(GLOB CUDA_LIBS "E:/lib/cudalib-11.8/development/lib/x64/*.lib")
 file(GLOB TensorRT_LIBS "E:/lib/Tensorrt/TensorRT-10.0.1.6/lib/*.lib")
 
+
+set(TensorRT_INCLUDE_DIR "/root/TensorRT/include")
+set(CUDA_INCLUDE_DIR "/usr/local/cuda/include")
+file(GLOB CUDA_LIBS "/usr/local/cuda/lib64/*.so")
+file(GLOB TensorRT_LIBS "/root/TensorRT/lib/*.so")
+
+
 # find dependencies library
 find_package(OpenCV REQUIRED)
 
@@ -40,13 +47,19 @@ PUBLIC
 )
 
 
-add_executable(main main.cc)
-target_link_libraries(main
+add_executable(igev IGEV.cc)
+target_link_libraries(igev
     trtemplate
 )
 
-add_executable(example example.cc)
+add_executable(yolo YOLO.cc)
+target_link_libraries(yolo
+    trtemplate
+)
 
-target_link_libraries(example
+
+add_executable(fcn FCN.cc)
+
+target_link_libraries(fcn
     trtemplate
 )
