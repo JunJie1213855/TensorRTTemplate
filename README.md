@@ -20,7 +20,7 @@ cmake --build build --config release
 
 
 ### ✨ Example
-First，download the onnx file of YOLOv8 and fcn from the link (Google Drive)[https://drive.google.com/drive/folders/19UBgYWeEADKTA1w44HIDkzn2oPxKATOH?usp=drive_link].
+First，download the onnx file of YOLOv8 and fcn from the link (GoogleDrive)[https://drive.google.com/drive/folders/19UBgYWeEADKTA1w44HIDkzn2oPxKATOH?usp=drive_link].
 
 #### YOLOv8 - Detection Example
 convert the onnx file to engien file like
