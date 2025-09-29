@@ -1,7 +1,7 @@
 #include "TRTinfer.h"
 #include <opencv2/opencv.hpp>
 #include <random>
-namespace FCN
+namespace SegFormer
 {
     std::unordered_map<std::string, cv::Mat> preprocess(const cv::Mat &img)
     {
@@ -85,12 +85,12 @@ namespace FCN
 int main(int argc, char *argv[])
 {
     // model
-    TRTInfer model("fcn.engine");
+    TRTInfer model("segformer.engine");
     // image
-    cv::Mat image = cv::imread("demo/bus.jpg");
+    cv::Mat image = cv::imread("/root/code/python/ImageSegment/mmsegmentation/demo/demo.png");
 
     // preprocess
-    auto input_blob = FCN::preprocess(image);
+    auto input_blob = SegFormer::preprocess(image);
 
     // inference
     auto output_blob = model(input_blob);
@@ -99,14 +99,15 @@ int main(int argc, char *argv[])
 
     // convert unsigned char type
     mat2d.convertTo(mat2d, CV_8U);
+    // cv::resize(mat2d, mat2d, image.size(), 0, 0, cv::INTER_NEAREST);
 
     cv::Mat viz, mask, image_512;
-    cv::resize(image, image_512, cv::Size(512, 512));
     // apply color map
-    viz = FCN::visualizeSegmentation(mat2d);
-
+    viz = SegFormer::visualizeSegmentation(mat2d);
     // for mask
-    cv::addWeighted(image, 0.7, viz, 0.3, 0, mask);
+
+    cv::resize(image, image_512, cv::Size(512, 512));
+    cv::addWeighted(image_512, 0.7, viz, 0.3, 0, mask);
 
     // show result
     cv::imshow("output", viz);

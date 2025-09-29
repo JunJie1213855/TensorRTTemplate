@@ -63,3 +63,11 @@ add_executable(fcn FCN.cc)
 target_link_libraries(fcn
     trtemplate
 )
+
+
+
+add_executable(segformer Segformer.cc)
+
+target_link_libraries(segformer
+    trtemplate
+)
