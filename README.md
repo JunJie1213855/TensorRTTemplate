@@ -3,7 +3,7 @@
 ### 🛠️ Introduction
 This is a template library for TensorRT inference that supports OpenCV's cv:: Mat type data and can support multiple input and output data.
 
-### 🛠️ Environment
+### ✒️​ Environment
 * Windows 11 / Ubuntu20.04
 * msvc / gnu
 * TensorRT 10.x
