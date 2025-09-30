@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
     viz = FCN::visualizeSegmentation(mat2d);
 
     // for mask
-    cv::addWeighted(image, 0.7, viz, 0.3, 0, mask);
+    cv::addWeighted(image_512, 0.7, viz, 0.3, 0, mask);
 
     // show result
     cv::imshow("output", viz);
