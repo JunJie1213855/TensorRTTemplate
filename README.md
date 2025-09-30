@@ -44,7 +44,7 @@ more detail code see YOLO.cc.
 
 ![alt text](demo/image.png)
 
-#### FCN - Segmenatation Example
+#### FCN / Segformer - Segmenatation Example
 convert the onnx file to engien file like
 ```bash
 trtexec \ 
@@ -62,7 +62,7 @@ run
 # or linux
 ./build/fcn
 ```
-more detail code see FCN.cc.
+more detail code see FCN.cc.And Segformer is like this.
 
 ![alt text](demo/image-1.png)
 
