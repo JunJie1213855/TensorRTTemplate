@@ -301,7 +301,7 @@ std::unordered_map<std::string, cv::Mat> TRTInfer::infer(const std::unordered_ma
             );
         output_blob[names] = output;
         const auto &iter = outputBindings.find(names);
-        if (iter != inputBindings.end())
+        if (iter != outputBindings.end())
         {
             cudaError_t err = cudaMemcpyAsync(output.data, iter->second, datasize, cudaMemcpyDeviceToHost);
             if (err != cudaSuccess)
