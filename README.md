@@ -13,6 +13,12 @@ This is a template library for TensorRT inference that supports OpenCV's cv:: Ma
 
 
 ### 📦 Build
+
+Configure CUDA and TensorRT according to online guides. Please note that the APIs for TensorRT 8.x and TensorRT 10.x are not fully compatible; therefore, you must use the TensorRT 10.x version specifically for this project. Also, install OpenCV by the command
+```bash
+sudo apt install libopencv-dev
+```
+The, compiling with cmake
 ```bash
 cmake -S . -B build
 cmake --build build --config release
@@ -109,3 +115,28 @@ int main(int argc, char *argv[])
     return 1;
 }
 ```
+Here are a few points that may likely cause errors:
+* Tensor Names
+  * Some weight files have inconsistent input tensor names – handle with care
+* Data Types
+  * Internal data type conversions may be involved – proceed with caution
+* Input Data Shape
+  * While preprocessing includes resizing, errors may occur inside the model – pay close attention
+
+It's best to run a check with Polygraphy before execution. For example, here's the command for checking YOLOv8:
+```bash
+$ polygraphy run yolov8n.onnx --onnxrt
+[I] RUNNING | Command: /root/miniconda3/envs/dlpy310/bin/polygraphy run yolov8n.onnx --onnxrt
+[I] onnxrt-runner-N0-11/21/25-13:22:08  | Activating and starting inference
+[I] Creating ONNX-Runtime Inference Session with providers: ['CPUExecutionProvider']
+[I] onnxrt-runner-N0-11/21/25-13:22:08 
+    ---- Inference Input(s) ----
+    {images [dtype=float32, shape=(1, 3, 640, 480)]}
+[I] onnxrt-runner-N0-11/21/25-13:22:08 
+    ---- Inference Output(s) ----
+    {output0 [dtype=float32, shape=(1, 84, 6300)]}
+[I] onnxrt-runner-N0-11/21/25-13:22:08  | Completed 1 iteration(s) in 59.11 ms | Average inference time: 59.11 ms.
+[I] PASSED | Runtime: 1.037s | Command: /root/miniconda3/envs/dlpy310/bin/polygraphy run yolov8n.onnx --onnxrt
+```
+
+The name, type, and dimensions of the tensor can be clearly seen.
