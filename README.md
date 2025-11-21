@@ -123,7 +123,7 @@ Here are a few points that may likely cause errors:
 * Input Data Shape
   * While preprocessing includes resizing, errors may occur inside the model – pay close attention
 
-It's best to run a check with Polygraphy before execution. For example, here's the command for checking YOLOv8:
+It's best to run a check with python lib `polygraphy` before execution. For example, here's the command for checking YOLOv8:
 ```bash
 $ polygraphy run yolov8n.onnx --onnxrt
 [I] RUNNING | Command: /root/miniconda3/envs/dlpy310/bin/polygraphy run yolov8n.onnx --onnxrt
