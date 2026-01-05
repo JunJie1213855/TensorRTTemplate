@@ -11,14 +11,15 @@
 #include <unordered_map>
 #include <opencv2/opencv.hpp>
 #include "utility.h"
+#include "config.h"
 
-class Logger : public nvinfer1::ILogger
+class TRTInfer_API Logger : public nvinfer1::ILogger
 {
 public:
     void log(Severity severity, const char *msg) noexcept override;
 };
 
-class TRTInfer
+class TRTInfer_API TRTInfer
 {
     // init -> load engine -> allocate cuda memory  -> inference
 public:
@@ -75,4 +76,4 @@ private:
     std::unordered_map<std::string, void *> inputBindings, outputBindings;
 };
 
-#endif 
+#endif

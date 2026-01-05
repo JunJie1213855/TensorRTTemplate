@@ -27,7 +27,7 @@ namespace utilty
             return false;
         }
         std::cout << "CUDA memory successfully freed." << std::endl;
-        ptr = nullptr; // 释放后将指针设置为nullptr
+        ptr = nullptr; // Set pointer to nullptr after freeing
         return true;
     }
     int getTypebytes(const nvinfer1::DataType &type)

@@ -2,25 +2,37 @@ cmake_minimum_required(VERSION 3.20)
 
 project(trttemplate)
 
-# set lib type
+set(CMAKE_CXX_STANDARD 17)
 set(LIB_TYPE SHARED)
+set(CUDA_ROOT_DIR "E:/lib/cuda/12.1")
+set(TensorRT_ROOT_DIR "E:/lib/TensorRT/TensorRT-10.10.0.31")
+
+
+
+# set lib type
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    set(LIB_TYPE STATIC)
-    message("Window operating system build static library")
+    message("-- Window operating system")
+
+    # for opencv cmake config
+    set(OpenCV_ROOT_DIR "E:/lib/opencv/opencv-4.8.0/build/x64/vc16/lib")
+    set(CMAKE_PREFIX_PATH "${OpenCV_ROOT_DIR};${CMAKE_PREFIX_PATH}")
+    
+    # set TensorRT and cuda library and include directory for windows system
+    set(TensorRT_INCLUDE_DIR "${TensorRT_ROOT_DIR}/include")
+    set(CUDA_INCLUDE_DIR "${CUDA_ROOT_DIR}/include")
+    file(GLOB CUDA_LIBS "${CUDA_ROOT_DIR}/lib/x64/*.lib")
+    file(GLOB TensorRT_LIBS "${TensorRT_ROOT_DIR}/lib/*.lib")
+    message("-- TensorRT libs : ${CUDA_LIBS}")
+    message("-- Cuda libs : ${TensorRT_LIBS}")
+else()
+# set TensorRT and cuda library and include directory for linux system
+    set(TensorRT_INCLUDE_DIR "${TensorRT_ROOT_DIR}/include")
+    set(CUDA_INCLUDE_DIR "${CUDA_ROOT_DIR}/include")
+    file(GLOB CUDA_LIBS "${CUDA_ROOT_DIR}/lib64/*.so")
+    file(GLOB TensorRT_LIBS "${TensorRT_ROOT_DIR}/lib/*.so")
+    message("-- TensorRT libs : ${CUDA_LIBS}")
+    message("-- Cuda libs : ${TensorRT_LIBS}")
 endif()
-
-# set TensorRT and cuda library and include directory
-set(TensorRT_INCLUDE_DIR "E:/lib/Tensorrt/TensorRT-10.0.1.6/include")
-set(CUDA_INCLUDE_DIR "E:/lib/cudalib-11.8/development/include")
-file(GLOB CUDA_LIBS "E:/lib/cudalib-11.8/development/lib/x64/*.lib")
-file(GLOB TensorRT_LIBS "E:/lib/Tensorrt/TensorRT-10.0.1.6/lib/*.lib")
-
-
-set(TensorRT_INCLUDE_DIR "/root/TensorRT/include")
-set(CUDA_INCLUDE_DIR "/usr/local/cuda/include")
-file(GLOB CUDA_LIBS "/usr/local/cuda/lib64/*.so")
-file(GLOB TensorRT_LIBS "/root/TensorRT/lib/*.so")
-
 
 # find dependencies library
 find_package(OpenCV REQUIRED)
@@ -37,6 +49,12 @@ add_library(trtemplate ${LIB_TYPE}
     TRTInfer/TRTinfer.cc
     TRTInfer/utility.cc
 )
+
+# 为共享库添加BUILD_SHARED定义（用于Windows DLL导出）
+if(${LIB_TYPE} STREQUAL "SHARED")
+    message("-- BUILD SHARED LIBS")
+    target_compile_definitions(trtemplate PRIVATE BUILD_SHARED)
+endif()
 
 target_link_libraries(trtemplate 
 PRIVATE
@@ -59,7 +77,6 @@ target_link_libraries(yolo
 
 
 add_executable(fcn FCN.cc)
-
 target_link_libraries(fcn
     trtemplate
 )
@@ -67,7 +84,6 @@ target_link_libraries(fcn
 
 
 add_executable(segformer Segformer.cc)
-
 target_link_libraries(segformer
     trtemplate
 )

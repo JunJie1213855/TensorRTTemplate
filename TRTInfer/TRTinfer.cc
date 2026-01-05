@@ -169,13 +169,13 @@ void TRTInfer::get_OutputNames()
             output_names.emplace_back(std::string(name));
             output_size[std::string(name)] = utilty::getTensorbytes(engine->getTensorShape(name), engine->getTensorDataType(name));
             // third
-            // 讲tensorrt的dim类似转换为opencv的dims类型
+            // Convert TensorRT dims to OpenCV dims
             nvinfer1::Dims dims = engine->getTensorShape(name);
             std::vector<int> dim;
             dim.reserve(dims.nbDims);
             for(int i = 0;i < dims.nbDims;i++)
                 dim.emplace_back(dims.d[i]);
-            // 填充类型
+            // Fill type
             output_shape[std::string(name)] = dim;
         }
     }
@@ -260,7 +260,7 @@ std::unordered_map<std::string, cv::Mat> TRTInfer::infer(const std::unordered_ma
         const std::string &key = input_data.first;
         cv::Mat cpu_ptr = input_data.second;
 
-        // 类型转换
+        // Type conversion
         if (utilty::typeCv2Rt(cpu_ptr.type()) != engine->getTensorDataType(key.c_str()))
             cpu_ptr.convertTo(cpu_ptr, utilty::typeRt2Cv(engine->getTensorDataType(key.c_str())));
         auto iter = inputBindings.find(key);
@@ -293,7 +293,7 @@ std::unordered_map<std::string, cv::Mat> TRTInfer::infer(const std::unordered_ma
     for (const auto &names : output_names)
     {
         size_t datasize = output_size[names];
-        // 创建输出数据
+        // Create output data
         cv::Mat output(
             output_shape[names].size(),
             output_shape[names].data(),

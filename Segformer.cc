@@ -29,36 +29,36 @@ namespace SegFormer
         cv::Mat blob = cv::dnn::blobFromImage(normalized_img, 1.0, cv::Size(512, 512), cv::Scalar(), false, false);
 
         std::unordered_map<std::string, cv::Mat> input_blob;
-        input_blob["input"] = blob; // 根据你的模型输入名称调整
+        input_blob["input"] = blob; // Adjust according to your model input name
         return input_blob;
     }
     cv::Mat visualizeSegmentation(const cv::Mat &segMap)
     {
-        // 定义颜色调色板 (BGR格式)
+        // Define color palette (BGR format)
         std::vector<cv::Vec3b> colorMap = {
-            {0, 0, 0},       // 0: 黑色 - 背景
-            {0, 0, 255},     // 1: 红色
-            {0, 255, 0},     // 2: 绿色
-            {255, 0, 0},     // 3: 蓝色
-            {0, 255, 255},   // 4: 黄色
-            {255, 0, 255},   // 5: 品红
-            {255, 255, 0},   // 6: 青色
-            {128, 0, 128},   // 7: 紫色
-            {255, 128, 0},   // 8: 橙色
-            {0, 128, 255},   // 9: 天蓝色
-            {128, 255, 0},   // 10: 青绿色
-            {255, 0, 128},   // 11: 玫红色
-            {128, 128, 0},   // 12: 橄榄绿
-            {0, 128, 128},   // 13: 青绿色
-            {128, 0, 0},     // 14: 深红色
-            {0, 0, 128},     // 15: 深蓝色
-            {255, 255, 255}, // 16: 白色
-            {192, 192, 192}, // 17: 银灰色
-            {128, 128, 128}, // 18: 灰色
-            {255, 165, 0}    // 19: 橙红色
+            {0, 0, 0},       // 0: black - background
+            {0, 0, 255},     // 1: red
+            {0, 255, 0},     // 2: green
+            {255, 0, 0},     // 3: blue
+            {0, 255, 255},   // 4: yellow
+            {255, 0, 255},   // 5: magenta
+            {255, 255, 0},   // 6: cyan
+            {128, 0, 128},   // 7: purple
+            {255, 128, 0},   // 8: orange
+            {0, 128, 255},   // 9: sky blue
+            {128, 255, 0},   // 10: turquoise
+            {255, 0, 128},   // 11: rose
+            {128, 128, 0},   // 12: olive green
+            {0, 128, 128},   // 13: teal
+            {128, 0, 0},     // 14: dark red
+            {0, 0, 128},     // 15: dark blue
+            {255, 255, 255}, // 16: white
+            {192, 192, 192}, // 17: silver
+            {128, 128, 128}, // 18: gray
+            {255, 165, 0}    // 19: orange red
         };
 
-        cv::Mat coloredMap(segMap.rows, segMap.cols, CV_8UC3);
+        cv::Mat coloredMap = cv::Mat(segMap.rows, segMap.cols, CV_8UC3);
 
         for (int i = 0; i < segMap.rows; i++)
         {
@@ -66,7 +66,7 @@ namespace SegFormer
             {
                 int label = segMap.at<uchar>(i, j);
 
-                // 如果类别超过调色板大小，使用循环
+                // If class exceeds palette size, use modulo
                 label = label % colorMap.size();
                 coloredMap.at<cv::Vec3b>(i, j) = colorMap[label];
             }
