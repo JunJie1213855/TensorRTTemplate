@@ -35,15 +35,6 @@ set(LIB_TYPE SHARED)  # Options: SHARED (.so) or STATIC
 - `LIB_TYPE = SHARED`: Build as shared library (Windows: `.dll`, Linux: `.so`)
 - `LIB_TYPE = STATIC`: Build as static library (Windows: `.lib`, Linux: `.a`)
 
-#### Build Configurations
-- `--config release`: Optimized release build (recommended for production)
-- `--config debug`: Debug build with symbols (for development)
-
-#### Parallel Build
-- `-j N`: Use N parallel jobs for faster compilation
-- `-j 12`: Use 12 parallel jobs (adjust based on your CPU cores)
-
-
 
 ### 📦 Build
 
@@ -77,7 +68,7 @@ set(LIB_TYPE SHARED)  # Options: SHARED (.so) or STATIC
    ```bash
    sudo apt update
    sudo apt install cuda-toolkit-12-x  # or cuda-toolkit-11-x
-   sudo apt install libopencv-dev
+   sudo apt install libopencv-dev // for opencv
    ```
 
 2. **Install TensorRT:**
@@ -102,7 +93,7 @@ set(LIB_TYPE SHARED)  # Options: SHARED (.so) or STATIC
 #### Common Build Issues
 
 1. **TensorRT Version Compatibility:**
-   - TensorRT 8.x and 10.x APIs are not compatible
+   - TensorRT 8.x are not compatible
    - Must use TensorRT 10.x for this project
 
 2. **CUDA Version Mismatch:**
