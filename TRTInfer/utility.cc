@@ -15,7 +15,7 @@ namespace utilty
     }
     bool safeCudaFree(void *&ptr)
     {
-        if (ptr != nullptr)
+        if (ptr == nullptr)
         {
             std::cerr << "Pointer is already nullptr." << std::endl;
             return false;
