@@ -69,13 +69,13 @@ TRTInfer::TRTInfer(const std::string &engine_path) : logger()
 
     load_engine(engine_path);
 
-    context.reset(engine->createExecutionContext());
-
     get_InputNames();
 
     get_OutputNames();
 
     get_bindings();
+
+    set_OutputBlob();
 
     cudaStreamCreate(&stream);
 }
@@ -83,14 +83,17 @@ TRTInfer::~TRTInfer()
 {
     // destory stream
     cudaStreamDestroy(stream);
+
     // release cuda data
     for (auto &data : inputBindings)
         cudaFree(data.second);
     for (auto &data : outputBindings)
         cudaFree(data.second);
+
+    // No need to delete output_blob_ptr - smart pointers handle this automatically
 }
 
-std::unordered_map<std::string, void *> TRTInfer::operator()(const std::unordered_map<std::string, void *> &input_blob)
+std::unordered_map<std::string, std::shared_ptr<char[]>> TRTInfer::operator()(const std::unordered_map<std::string, void *> &input_blob)
 {
     return infer(input_blob);
 }
@@ -105,6 +108,7 @@ void TRTInfer::load_engine(const std::string &engine_path)
     std::ifstream file(engine_path, std::ios::binary);
     if (!file.good())
     {
+        file.close();
         std::cerr << "Error reading engine file" << std::endl;
         throw std::runtime_error("Error reading engine file");
     }
@@ -117,6 +121,7 @@ void TRTInfer::load_engine(const std::string &engine_path)
 
     // runtime
     runtime.reset(nvinfer1::createInferRuntime(logger));
+
     if (!runtime)
     {
         std::cerr << "Failed to create runtime" << std::endl;
@@ -132,6 +137,7 @@ void TRTInfer::load_engine(const std::string &engine_path)
         std::cerr << "Failed to create engine" << std::endl;
         throw std::runtime_error("Failed to create engine");
     }
+    context.reset(engine->createExecutionContext());
 }
 
 void TRTInfer::get_InputNames()
@@ -173,7 +179,7 @@ void TRTInfer::get_OutputNames()
             nvinfer1::Dims dims = engine->getTensorShape(name);
             std::vector<int> dim;
             dim.reserve(dims.nbDims);
-            for(int i = 0;i < dims.nbDims;i++)
+            for (int i = 0; i < dims.nbDims; i++)
                 dim.emplace_back(dims.d[i]);
             // Fill type
             output_shape[std::string(name)] = dim;
@@ -183,19 +189,36 @@ void TRTInfer::get_OutputNames()
 
 void TRTInfer::get_bindings()
 {
-    // allocate input memeory
+    // allocate input memeory for cuda
     for (int i = 0; i < input_names.size(); i++)
     {
         inputBindings[input_names[i]] = utilty::safeCudaMalloc(input_size[input_names[i]]);
     }
-    // allocate output memeory
+    // allocate output memeory for cuda
     for (int i = 0; i < output_names.size(); i++)
     {
         outputBindings[output_names[i]] = utilty::safeCudaMalloc(output_size[output_names[i]]);
     }
 }
 
-std::unordered_map<std::string, void *> TRTInfer::infer(const std::unordered_map<std::string, void *> &input_blob)
+void TRTInfer::set_OutputBlob()
+{
+    // output set is fixed, so we can set it here
+    for (int i = 0; i < output_names.size(); i++)
+    {
+        context->setOutputTensorAddress(output_names[i].c_str(), outputBindings[output_names[i]]);
+    }
+
+    // allocate output memory for cpu, the input memory is from user or outside
+    for (const auto &name : output_names)
+    {
+        // allocate memory using shared_ptr
+        size_t datasize = output_size[name];
+        output_blob_ptr[name] = std::shared_ptr<char[]>(new char[datasize]);
+    }
+}
+
+std::unordered_map<std::string, std::shared_ptr<char[]>> TRTInfer::infer(const std::unordered_map<std::string, void *> &input_blob)
 {
     // input copy
     for (const auto &input_data : input_blob)
@@ -219,26 +242,20 @@ std::unordered_map<std::string, void *> TRTInfer::infer(const std::unordered_map
         }
     }
 
-    // output set
-    for (int i = 0; i < output_names.size(); i++)
-    {
-        context->setOutputTensorAddress(output_names[i].c_str(), outputBindings[output_names[i]]);
-    }
 
     // async execute
     context->enqueueV3(stream);
 
     // copy the gpu data to cpu data
-    std::unordered_map<std::string, void *> output_blob;
     for (const auto &names : output_names)
     {
         size_t datasize = output_size[names];
-        void *value_ptr = (void *)new char[datasize];
-        output_blob[names] = value_ptr;
+        // Get raw pointer from shared_ptr for cudaMemcpy
+        void* ptr = static_cast<void*>(output_blob_ptr[names].get());
         const auto &iter = outputBindings.find(names);
-        if (iter != inputBindings.end())
+        if (iter != outputBindings.end())
         {
-            cudaError_t err = cudaMemcpyAsync(value_ptr, iter->second, datasize, cudaMemcpyDeviceToHost);
+            cudaError_t err = cudaMemcpyAsync(ptr, iter->second, datasize, cudaMemcpyDeviceToHost);
             if (err != cudaSuccess)
             {
                 std::cerr << "CUDA memcpyAsync failed: " << cudaGetErrorString(err) << std::endl;
@@ -249,7 +266,8 @@ std::unordered_map<std::string, void *> TRTInfer::infer(const std::unordered_map
 
     // waiting for the stream
     cudaStreamSynchronize(stream);
-    return output_blob;
+
+    return output_blob_ptr; // Smart pointers handle memory automatically
 }
 
 std::unordered_map<std::string, cv::Mat> TRTInfer::infer(const std::unordered_map<std::string, cv::Mat> &input_blob)
@@ -269,7 +287,7 @@ std::unordered_map<std::string, cv::Mat> TRTInfer::infer(const std::unordered_ma
             void *cuda_ptr = iter->second;
             size_t data_size = input_size[key];
 
-            cudaError_t err = cudaMemcpyAsync(cuda_ptr, cpu_ptr.data, data_size, cudaMemcpyHostToDevice, stream);
+            cudaError_t err = cudaMemcpyAsync(cuda_ptr, static_cast<void*>(cpu_ptr.data), data_size, cudaMemcpyHostToDevice, stream);
             if (err != cudaSuccess)
             {
                 std::cerr << "CUDA memcpyAsync failed: " << cudaGetErrorString(err) << std::endl;
@@ -279,31 +297,20 @@ std::unordered_map<std::string, cv::Mat> TRTInfer::infer(const std::unordered_ma
             context->setInputTensorAddress(key.c_str(), cuda_ptr);
         }
     }
-    // output set
-    for (int i = 0; i < output_names.size(); i++)
-    {
-        context->setOutputTensorAddress(output_names[i].c_str(), outputBindings[output_names[i]]);
-    }
 
     // async execute
     context->enqueueV3(stream);
 
     // copy the gpu data to cpu data
-    std::unordered_map<std::string, cv::Mat> output_blob;
     for (const auto &names : output_names)
     {
         size_t datasize = output_size[names];
-        // Create output data
-        cv::Mat output(
-            output_shape[names].size(),
-            output_shape[names].data(),
-            utilty::typeRt2Cv(engine->getTensorDataType(names.c_str()))
-            );
-        output_blob[names] = output;
+        // Get raw pointer from shared_ptr for cudaMemcpy
+        void* ptr = static_cast<void*>(output_blob_ptr[names].get());
         const auto &iter = outputBindings.find(names);
         if (iter != outputBindings.end())
         {
-            cudaError_t err = cudaMemcpyAsync(output.data, iter->second, datasize, cudaMemcpyDeviceToHost);
+            cudaError_t err = cudaMemcpyAsync(ptr, iter->second, datasize, cudaMemcpyDeviceToHost);
             if (err != cudaSuccess)
             {
                 std::cerr << "CUDA memcpyAsync failed: " << cudaGetErrorString(err) << std::endl;
@@ -314,5 +321,23 @@ std::unordered_map<std::string, cv::Mat> TRTInfer::infer(const std::unordered_ma
 
     // waiting for the stream
     cudaStreamSynchronize(stream);
+    
+    // Construct cv::Mat from shared_ptr (deep copy to avoid dangling pointers)
+    std::unordered_map<std::string, cv::Mat> output_blob;
+    for (const auto &names : output_names)
+    {
+        // First create cv::Mat using the shared_ptr data
+        cv::Mat temp(
+            output_shape[names].size(),
+            output_shape[names].data(),
+            utilty::typeRt2Cv(engine->getTensorDataType(names.c_str())),
+            output_blob_ptr[names].get()
+        );
+        
+        // Deep copy to ensure independent memory management
+        // This prevents dangling pointers when output_ptr is reused
+        output_blob[names] = temp.clone();
+    }
+    
     return output_blob;
 }
