@@ -28,12 +28,15 @@ public:
      * @param engine_path The weight path of engine
      */
     TRTInfer(const std::string &engine_path);
+
     /**
      * @brief Model inference, calling the inner function internally
      * @param input_blob The output blob data consists of the first data being the name of the input tensor, and the second data being the address header of the tensor data
      * @return output blob tensor
      */
-    std::unordered_map<std::string, void *> operator()(const std::unordered_map<std::string, void *> &input_blob);
+    std::unordered_map<std::string, std::shared_ptr<char[]>> operator()(const std::unordered_map<std::string, void *> &input_blob);
+    
+    
     /**
      * @brief  Model inference based on OpenCV cv::Mat, calling the inner function internally
      * @param input_blob The output blob data consists of the first data being the name of the input tensor, and the second data being the address header of the tensor data
@@ -52,7 +55,9 @@ private:
 
     void get_bindings();
 
-    std::unordered_map<std::string, void *> infer(const std::unordered_map<std::string, void *> &input_blob);
+    void set_OutputBlob();
+
+    std::unordered_map<std::string, std::shared_ptr<char[]>> infer(const std::unordered_map<std::string, void *> &input_blob);
 
     // for opencv Mat data
     std::unordered_map<std::string, cv::Mat> infer(const std::unordered_map<std::string, cv::Mat> &input_blob);
@@ -65,6 +70,9 @@ private:
     cudaStream_t stream;
     Logger logger;
 
+    // output blob data
+    std::unordered_map<std::string, std::shared_ptr<char[]>> output_blob_ptr;
+
     // data
     std::vector<std::string> input_names, output_names;
     std::unordered_map<std::string, size_t> input_size, output_size;
@@ -73,6 +81,8 @@ private:
 
     // bindings
     std::unordered_map<std::string, cv::Mat> input_Bindings, output_Bindings;
+
+    // for cuda memory, just allocate one time
     std::unordered_map<std::string, void *> inputBindings, outputBindings;
 };
 
