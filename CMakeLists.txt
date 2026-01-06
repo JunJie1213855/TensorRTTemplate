@@ -1,11 +1,11 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.15)
 
 project(trttemplate)
 
 set(CMAKE_CXX_STANDARD 17)
 set(LIB_TYPE SHARED)
-set(CUDA_ROOT_DIR "E:/lib/cuda/12.1")
-set(TensorRT_ROOT_DIR "E:/lib/TensorRT/TensorRT-10.10.0.31")
+set(CUDA_ROOT_DIR "/usr/local/cuda")
+set(TensorRT_ROOT_DIR "/root/TensorRT")
 
 
 

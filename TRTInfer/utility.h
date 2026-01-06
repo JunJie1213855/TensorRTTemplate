@@ -6,7 +6,7 @@
 #include <opencv2/core.hpp>
 #include "config.h"
 
-namespace utilty
+namespace utility
 {
     /**
      *@brief Safely Allocate GPU Memor

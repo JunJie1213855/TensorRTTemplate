@@ -96,7 +96,7 @@ namespace YOLO
 int main(int argc, char *argv[])
 {
     // model
-    TRTInfer model("yolov8n.engine");
+    TRTInfer model("./yolov8n.engine");
     // image
     cv::Mat image = cv::imread("./demo/bus.jpg");
     // for rescale factor
