@@ -30,7 +30,7 @@ namespace utilty
         ptr = nullptr; // Set pointer to nullptr after freeing
         return true;
     }
-    int getTypebytes(const nvinfer1::DataType &type)
+    float getTypebytes(const nvinfer1::DataType &type)
     {
         switch (type)
         {
