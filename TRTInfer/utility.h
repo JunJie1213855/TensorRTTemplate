@@ -27,7 +27,7 @@ namespace utilty
      *@param type The basic types of  tensorrt
      *@return byte count
      */
-    TRTInfer_API int getTypebytes(const nvinfer1::DataType &type);
+    TRTInfer_API float getTypebytes(const nvinfer1::DataType &type);
 
     /**
      *@brief Input the dimensions and basic types of a matrix, and output the total number of bytes in this matrix
