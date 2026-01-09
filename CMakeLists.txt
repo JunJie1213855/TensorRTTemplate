@@ -87,3 +87,10 @@ add_executable(segformer Segformer.cc)
 target_link_libraries(segformer
     trtemplate
 )
+
+
+
+add_executable(s2m2 s2m2.cc)
+target_link_libraries(s2m2
+    trtemplate
+)
