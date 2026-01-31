@@ -107,11 +107,16 @@ int main(int argc, char *argv[])
     auto input_blob = YOLO::preprocess(image);
     // inference
     auto output_blob = model(input_blob);
-    // post process
+     // post process
     cv::Mat result = YOLO::postprocess(output_blob["output0"], image, scale_factor);
+    
+    // Save result instead of showing
+    cv::imwrite("detection_yolo.png", result);
+    std::cout << "Result saved to: detection_yolo.png" << std::endl;
+    
     // show result
     cv::imshow("output", result);
-    cv::waitKey();
-
-    return 1;
+    cv::waitKey(100);  // Wait 100ms then exit
+ 
+    return 0;
 }

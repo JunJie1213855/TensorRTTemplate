@@ -50,8 +50,8 @@ void postprocess(const cv::Mat &disp, cv::Mat &disp_vis)
 
 int main(int argc, char *argv[])
 {
-    cv::Mat left = cv::imread("rect_left.png");
-    cv::Mat right = cv::imread("rect_right.png");
+    cv::Mat left = cv::imread("/root/code/C++/TensorRTTemplate/rect_left.png");
+    cv::Mat right = cv::imread("/root/code/C++/TensorRTTemplate/rect_right.png");
 
     // preprocess
     auto input_blob = preprocess(left, right);

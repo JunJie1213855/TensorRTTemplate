@@ -9,9 +9,15 @@
 #include <vector>
 #include <map>
 #include <unordered_map>
+#include <memory>
+#include <future>
 #include <opencv2/opencv.hpp>
 #include "utility.h"
 #include "config.h"
+#include "inference_config.h"
+#include "stream_pool.h"
+#include "memory_pool.h"
+#include "async_infer.h"
 
 class TRTInfer_API Logger : public nvinfer1::ILogger
 {
@@ -28,6 +34,13 @@ public:
      * @param engine_path The weight path of engine
      */
     TRTInfer(const std::string &engine_path);
+    
+    /**
+     * @param engine_path The weight path of engine
+     * @param num_streams Number of CUDA streams for concurrent inference (default: 4)
+     * @param enable_async Enable async inference (default: true)
+     */
+    TRTInfer(const std::string &engine_path, int num_streams, bool enable_async = true);
 
     /**
      * @brief Model inference, calling the inner function internally
@@ -43,6 +56,48 @@ public:
      * @return output blob tensor
      */
     std::unordered_map<std::string, cv::Mat> operator()(const std::unordered_map<std::string, cv::Mat> &input_blob);
+
+    /**
+     * @brief Async inference with future return
+     * @param input_blob Input data
+     * @return Future containing output data
+     */
+    std::future<std::unordered_map<std::string, std::shared_ptr<char[]>>> 
+    infer_async(const std::unordered_map<std::string, void *> &input_blob);
+    
+    /**
+     * @brief Async inference with future return (cv::Mat)
+     * @param input_blob Input data
+     * @return Future containing output data
+     */
+    std::future<std::unordered_map<std::string, cv::Mat>> 
+    infer_async(const std::unordered_map<std::string, cv::Mat> &input_blob);
+    
+    /**
+     * @brief Async inference with callback
+     * @param input_blob Input data
+     * @param callback Callback function to be called when inference completes
+     */
+    void infer_with_callback(const std::unordered_map<std::string, void *> &input_blob,
+                             std::function<void(const std::unordered_map<std::string, std::shared_ptr<char[]>>&)> callback);
+    
+    /**
+     * @brief Async inference with callback (cv::Mat)
+     * @param input_blob Input data
+     * @param callback Callback function to be called when inference completes
+     */
+    void infer_with_callback(const std::unordered_map<std::string, cv::Mat> &input_blob,
+                             std::function<void(const std::unordered_map<std::string, cv::Mat>&)> callback);
+    
+    /**
+     * @brief Wait for all pending async inferences to complete
+     */
+    void wait_all();
+    
+    /**
+     * @brief Get number of active streams
+     */
+    int num_streams() const;
 
     ~TRTInfer();
 
@@ -62,13 +117,20 @@ private:
     // for opencv Mat data
     std::unordered_map<std::string, cv::Mat> infer(const std::unordered_map<std::string, cv::Mat> &input_blob);
 
-private:
+ private:
     // plugin
     std::unique_ptr<nvinfer1::IRuntime> runtime;
     std::unique_ptr<nvinfer1::ICudaEngine> engine;
     std::unique_ptr<nvinfer1::IExecutionContext> context;
     cudaStream_t stream;
     Logger logger;
+    
+    // async components
+    bool enable_async_;
+    std::shared_ptr<inference::StreamPool> stream_pool_;
+    std::shared_ptr<inference::MemoryPool> memory_pool_;
+    std::unique_ptr<inference::AsyncInfer<std::unordered_map<std::string, std::shared_ptr<char[]>>>> async_infer_ptr_;
+    std::unique_ptr<inference::AsyncInfer<std::unordered_map<std::string, cv::Mat>>> async_infer_mat_;
 
     // output blob data
     std::unordered_map<std::string, std::shared_ptr<char[]>> output_blob_ptr;
