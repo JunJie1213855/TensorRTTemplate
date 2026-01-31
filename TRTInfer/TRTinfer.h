@@ -32,15 +32,10 @@ public:
     TRTInfer() = delete;
     /**
      * @param engine_path The weight path of engine
+     * @param num_streams Number of CUDA streams for concurrent inference (default: 0, sync mode)
+     * @param enable_async Enable async inference (default: false, sync mode)
      */
-    TRTInfer(const std::string &engine_path);
-    
-    /**
-     * @param engine_path The weight path of engine
-     * @param num_streams Number of CUDA streams for concurrent inference (default: 4)
-     * @param enable_async Enable async inference (default: true)
-     */
-    TRTInfer(const std::string &engine_path, int num_streams, bool enable_async = true);
+    TRTInfer(const std::string &engine_path, int num_streams = 0, bool enable_async = false);
 
     /**
      * @brief Model inference, calling the inner function internally

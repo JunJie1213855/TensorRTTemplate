@@ -65,23 +65,7 @@ void Logger::log(Severity severity, const char *msg) noexcept
 }
 
 // TRTInfer
-TRTInfer::TRTInfer(const std::string &engine_path) : logger(), enable_async_(false)
-{
-
-    load_engine(engine_path);
-
-    get_InputNames();
-
-    get_OutputNames();
-
-    get_bindings();
-
-    set_OutputBlob();
-
-    cudaStreamCreate(&stream);
-}
-
-TRTInfer::TRTInfer(const std::string &engine_path, int num_streams, bool enable_async) 
+TRTInfer::TRTInfer(const std::string &engine_path, int num_streams, bool enable_async)
     : logger(), enable_async_(enable_async) {
 
     load_engine(engine_path);
@@ -91,17 +75,20 @@ TRTInfer::TRTInfer(const std::string &engine_path, int num_streams, bool enable_
     get_OutputNames();
 
     if (enable_async) {
+        if (num_streams <= 0) {
+            num_streams = 4;
+        }
         stream_pool_ = std::make_shared<inference::StreamPool>(num_streams);
         memory_pool_ = std::make_shared<inference::MemoryPool>(input_size, output_size, num_streams);
-        
+
         async_infer_ptr_.reset(new inference::AsyncInfer<std::unordered_map<std::string, std::shared_ptr<char[]>>>(
             context.get(), engine.get(), stream_pool_, memory_pool_,
             input_names, output_names, input_size, output_size, {}));
-        
+
         async_infer_mat_.reset(new inference::AsyncInfer<std::unordered_map<std::string, cv::Mat>>(
             context.get(), engine.get(), stream_pool_, memory_pool_,
             input_names, output_names, input_size, output_size, output_shape));
-        
+
         std::cout << "Async inference enabled with " << num_streams << " streams" << std::endl;
     } else {
         get_bindings();
@@ -111,8 +98,11 @@ TRTInfer::TRTInfer(const std::string &engine_path, int num_streams, bool enable_
 }
 TRTInfer::~TRTInfer()
 {
-    // destory stream
-    cudaStreamDestroy(stream);
+    // destory stream (only for sync mode)
+    if (!enable_async_)
+    {
+        cudaStreamDestroy(stream);
+    }
 
     // release cuda data
     for (auto &data : inputBindings)

@@ -104,6 +104,8 @@ namespace YOLOAsync
 
 int main(int argc, char *argv[])
 {
+    (void)argc;
+    (void)argv;
     std::cout << "=== TensorRT Async Inference Example ===" << std::endl;
     std::cout << "Input Engine PAth : /root/code/C++/TensorRTTemplate/yolov8n.engine" << std::endl;
     std::cout << "Initializing model with 4 streams..." << std::endl;
@@ -114,7 +116,7 @@ int main(int argc, char *argv[])
         std::cout << "No display environment detected. Running in headless mode." << std::endl;
     }
 
-    TRTInfer model("/root/code/C++/TensorRTTemplate/yolov8n.engine", 4, true);
+    TRTInfer model("/root/code/C++/TensorRTTemplate/data/yolov8n.engine", 4, true);
 
     cv::Mat image = cv::imread("/root/code/C++/TensorRTTemplate/demo/bus.jpg");
     if (image.empty())
@@ -202,62 +204,8 @@ int main(int argc, char *argv[])
     {
         std::cout << "Async inference completed" << std::endl;
     }
-
-    std::cout << "\n3. Testing async inference with Callback..." << std::endl;
-    auto start_callback = std::chrono::high_resolution_clock::now();
-    bool callback_called = false;
-    cv::Mat *callback_result = new cv::Mat();
-
-    model.infer_with_callback(input_blob,
-                              [&callback_called, &image, &scale_factor, has_display, callback_result](std::unordered_map<std::string, cv::Mat> output)
-                              {
-                                  *callback_result = YOLOAsync::postprocess(output["output0"], image, scale_factor);
-                                  callback_called = true;
-                              });
-
-    model.wait_all();
-    auto end_callback = std::chrono::high_resolution_clock::now();
-    auto duration_callback = std::chrono::duration_cast<std::chrono::milliseconds>(end_callback - start_callback).count();
-    std::cout << "Async inference with callback time: " << duration_callback << " ms" << std::endl;
-    std::cout << "Callback called: " << (callback_called ? "Yes" : "No") << std::endl;
-
-    if (callback_result && !callback_result->empty())
-    {
-        std::cout << "Saving result_callback.png..." << std::endl;
-        cv::imwrite("result_callback.png", *callback_result);
-
-        // Count detections
-        int callback_detections = 0;
-        for (int y = 0; y < callback_result->rows; ++y)
-        {
-            for (int x = 0; x < callback_result->cols; ++x)
-            {
-                cv::Vec3b pixel = callback_result->at<cv::Vec3b>(y, x);
-                if (pixel != cv::Vec3b(0, 0, 0))
-                {
-                    callback_detections++;
-                }
-            }
-        }
-        std::cout << "Callback mode: Found " << callback_detections << " non-black pixels (detections drawn)" << std::endl;
-    }
-
-    if (has_display)
-    {
-        if (callback_result && !callback_result->empty())
-        {
-            cv::imshow("Callback Result", *callback_result);
-        }
-        cv::waitKey(100);
-    }
-    else
-    {
-        std::cout << "Callback inference completed" << std::endl;
-    }
-
-    delete callback_result;
-
-    std::cout << "\n4. Testing concurrent inference..." << std::endl;
+    cv::destroyAllWindows();
+    std::cout << "\n3. Testing concurrent inference..." << std::endl;
     const int num_concurrent = 8;
     std::vector<std::future<std::unordered_map<std::string, cv::Mat>>> futures;
 
@@ -282,19 +230,12 @@ int main(int argc, char *argv[])
     std::cout << "\n=== Performance Summary ===" << std::endl;
     std::cout << "Synchronous: " << duration_sync << " ms" << std::endl;
     std::cout << "Async (Future): " << duration_async << " ms" << std::endl;
-    std::cout << "Async (Callback): " << duration_callback << " ms" << std::endl;
     std::cout << "Concurrent (8 inferences): " << duration_concurrent << " ms" << std::endl;
     std::cout << "Average time per inference: " << (duration_concurrent / num_concurrent) << " ms" << std::endl;
+    std::cout << "Performance improvement: " << (duration_sync / (duration_concurrent / num_concurrent)) << "x" << std::endl;
     std::cout << "Model has " << model.num_streams() << " CUDA streams" << std::endl;
 
-    if (has_display)
-    {
-        cv::waitKey(0);
-    }
-    else
-    {
-        std::cout << "\nHeadless mode: Skipping display windows" << std::endl;
-    }
+    std::cout << "\nCleaning up..." << std::endl;
 
     return 0;
 }
