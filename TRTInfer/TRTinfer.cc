@@ -1,5 +1,6 @@
 #include "TRTinfer.h"
-// for dim
+#include "inference_config.h"
+#include <stdexcept>
 std::ostream &operator<<(std::ostream &cout, const nvinfer1::Dims &dim)
 {
     for (int i = 0; i < dim.nbDims; i++)
@@ -64,7 +65,7 @@ void Logger::log(Severity severity, const char *msg) noexcept
 }
 
 // TRTInfer
-TRTInfer::TRTInfer(const std::string &engine_path) : logger()
+TRTInfer::TRTInfer(const std::string &engine_path) : logger(), enable_async_(false)
 {
 
     load_engine(engine_path);
@@ -78,6 +79,35 @@ TRTInfer::TRTInfer(const std::string &engine_path) : logger()
     set_OutputBlob();
 
     cudaStreamCreate(&stream);
+}
+
+TRTInfer::TRTInfer(const std::string &engine_path, int num_streams, bool enable_async) 
+    : logger(), enable_async_(enable_async) {
+
+    load_engine(engine_path);
+
+    get_InputNames();
+
+    get_OutputNames();
+
+    if (enable_async) {
+        stream_pool_ = std::make_shared<inference::StreamPool>(num_streams);
+        memory_pool_ = std::make_shared<inference::MemoryPool>(input_size, output_size, num_streams);
+        
+        async_infer_ptr_.reset(new inference::AsyncInfer<std::unordered_map<std::string, std::shared_ptr<char[]>>>(
+            context.get(), engine.get(), stream_pool_, memory_pool_,
+            input_names, output_names, input_size, output_size, {}));
+        
+        async_infer_mat_.reset(new inference::AsyncInfer<std::unordered_map<std::string, cv::Mat>>(
+            context.get(), engine.get(), stream_pool_, memory_pool_,
+            input_names, output_names, input_size, output_size, output_shape));
+        
+        std::cout << "Async inference enabled with " << num_streams << " streams" << std::endl;
+    } else {
+        get_bindings();
+        set_OutputBlob();
+        cudaStreamCreate(&stream);
+    }
 }
 TRTInfer::~TRTInfer()
 {
@@ -100,6 +130,10 @@ std::unordered_map<std::string, std::shared_ptr<char[]>> TRTInfer::operator()(co
 
 std::unordered_map<std::string, cv::Mat> TRTInfer::operator()(const std::unordered_map<std::string, cv::Mat> &input_blob)
 {
+    if (enable_async_ && async_infer_mat_) {
+        auto future = async_infer_mat_->infer_async(input_blob);
+        return future.get();
+    }
     return infer(input_blob);
 }
 void TRTInfer::load_engine(const std::string &engine_path)
@@ -278,7 +312,7 @@ std::unordered_map<std::string, cv::Mat> TRTInfer::infer(const std::unordered_ma
         const std::string &key = input_data.first;
         cv::Mat cpu_ptr = input_data.second;
 
-        // Type conversion
+        // Type check, may conversion
         if (utility::typeCv2Rt(cpu_ptr.type()) != engine->getTensorDataType(key.c_str()))
             cpu_ptr.convertTo(cpu_ptr, utility::typeRt2Cv(engine->getTensorDataType(key.c_str())));
         auto iter = inputBindings.find(key);
@@ -340,4 +374,55 @@ std::unordered_map<std::string, cv::Mat> TRTInfer::infer(const std::unordered_ma
     }
     
     return output_blob;
+}
+
+std::future<std::unordered_map<std::string, std::shared_ptr<char[]>>> 
+TRTInfer::infer_async(const std::unordered_map<std::string, void *> &input_blob)
+{
+    if (!enable_async_ || !async_infer_ptr_) {
+        throw std::runtime_error("Async inference not enabled. Use constructor with num_streams parameter.");
+    }
+    return async_infer_ptr_->infer_async(input_blob);
+}
+
+std::future<std::unordered_map<std::string, cv::Mat>> 
+TRTInfer::infer_async(const std::unordered_map<std::string, cv::Mat> &input_blob)
+{
+    if (!enable_async_ || !async_infer_mat_) {
+        throw std::runtime_error("Async inference not enabled. Use constructor with num_streams parameter.");
+    }
+    return async_infer_mat_->infer_async(input_blob);
+}
+
+void TRTInfer::infer_with_callback(const std::unordered_map<std::string, void *> &input_blob,
+                                   std::function<void(const std::unordered_map<std::string, std::shared_ptr<char[]>>&)> callback)
+{
+    if (!enable_async_ || !async_infer_ptr_) {
+        throw std::runtime_error("Async inference not enabled. Use constructor with num_streams parameter.");
+    }
+    async_infer_ptr_->infer_with_callback(input_blob, callback);
+}
+
+void TRTInfer::infer_with_callback(const std::unordered_map<std::string, cv::Mat> &input_blob,
+                                   std::function<void(const std::unordered_map<std::string, cv::Mat>&)> callback)
+{
+    if (!enable_async_ || !async_infer_mat_) {
+        throw std::runtime_error("Async inference not enabled. Use constructor with num_streams parameter.");
+    }
+    async_infer_mat_->infer_with_callback(input_blob, callback);
+}
+
+void TRTInfer::wait_all()
+{
+    if (enable_async_ && stream_pool_) {
+        stream_pool_->synchronize_all();
+    }
+}
+
+int TRTInfer::num_streams() const
+{
+    if (enable_async_ && stream_pool_) {
+        return stream_pool_->num_streams();
+    }
+    return 1;
 }
