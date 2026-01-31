@@ -34,8 +34,9 @@ public:
      * @param engine_path The weight path of engine
      * @param num_streams Number of CUDA streams for concurrent inference (default: 0, sync mode)
      * @param enable_async Enable async inference (default: false, sync mode)
+     * @param use_cvMat Use cv::Mat based async inference (default: true, saves memory if you only use cv::Mat)
      */
-    TRTInfer(const std::string &engine_path, int num_streams = 0, bool enable_async = false);
+    TRTInfer(const std::string &engine_path, int num_streams = 0, bool enable_async = false, bool use_cvMat = true);
 
     /**
      * @brief Model inference, calling the inner function internally
@@ -103,8 +104,6 @@ private:
 
     void get_OutputNames();
 
-    void get_bindings();
-
     void set_OutputBlob();
 
     std::unordered_map<std::string, std::shared_ptr<char[]>> infer(const std::unordered_map<std::string, void *> &input_blob);
@@ -119,9 +118,10 @@ private:
     std::unique_ptr<nvinfer1::IExecutionContext> context;
     cudaStream_t stream;
     Logger logger;
-    
+
     // async components
     bool enable_async_;
+    bool use_cvMat_;
     std::shared_ptr<inference::StreamPool> stream_pool_;
     std::shared_ptr<inference::MemoryPool> memory_pool_;
     std::unique_ptr<inference::AsyncInfer<std::unordered_map<std::string, std::shared_ptr<char[]>>>> async_infer_ptr_;
@@ -135,12 +135,6 @@ private:
     std::unordered_map<std::string, size_t> input_size, output_size;
     std::unordered_map<std::string, std::vector<int>> output_shape;
     cv::Size size;
-
-    // bindings
-    std::unordered_map<std::string, cv::Mat> input_Bindings, output_Bindings;
-
-    // for cuda memory, just allocate one time
-    std::unordered_map<std::string, void *> inputBindings, outputBindings;
 };
 
 #endif

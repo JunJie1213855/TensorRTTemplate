@@ -96,9 +96,9 @@ namespace YOLO
 int main(int argc, char *argv[])
 {
     // model
-    TRTInfer model("./yolov8n.engine");
+    TRTInfer model("/root/code/C++/TensorRTTemplate/data/yolov8n.engine");
     // image
-    cv::Mat image = cv::imread("./demo/bus.jpg");
+    cv::Mat image = cv::imread("/root/code/C++/TensorRTTemplate/demo/bus.jpg");
     // for rescale factor
     float scalew = static_cast<float>(image.size().width) / 480.f;
     float scaleh = static_cast<float>(image.size().height) / 640.f;

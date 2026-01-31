@@ -65,8 +65,8 @@ void Logger::log(Severity severity, const char *msg) noexcept
 }
 
 // TRTInfer
-TRTInfer::TRTInfer(const std::string &engine_path, int num_streams, bool enable_async)
-    : logger(), enable_async_(enable_async) {
+TRTInfer::TRTInfer(const std::string &engine_path, int num_streams, bool enable_async, bool use_cvMat)
+    : logger(), enable_async_(enable_async), use_cvMat_(use_cvMat) {
 
     load_engine(engine_path);
 
@@ -74,42 +74,33 @@ TRTInfer::TRTInfer(const std::string &engine_path, int num_streams, bool enable_
 
     get_OutputNames();
 
+    if (num_streams <= 0) {
+        num_streams = 1;
+    }
+    stream_pool_ = std::make_shared<inference::StreamPool>(num_streams);
+    memory_pool_ = std::make_shared<inference::MemoryPool>(input_size, output_size, num_streams);
+
     if (enable_async) {
-        if (num_streams <= 0) {
-            num_streams = 4;
+        if (use_cvMat) {
+            async_infer_mat_.reset(new inference::AsyncInfer<std::unordered_map<std::string, cv::Mat>>(
+                context.get(), engine.get(), stream_pool_, memory_pool_,
+                input_names, output_names, input_size, output_size, output_shape));
+            std::cout << "Async inference enabled with " << num_streams << " streams (cv::Mat mode)" << std::endl;
+        } else {
+            async_infer_ptr_.reset(new inference::AsyncInfer<std::unordered_map<std::string, std::shared_ptr<char[]>>>(
+                context.get(), engine.get(), stream_pool_, memory_pool_,
+                input_names, output_names, input_size, output_size, {}));
+            std::cout << "Async inference enabled with " << num_streams << " streams (shared_ptr mode)" << std::endl;
         }
-        stream_pool_ = std::make_shared<inference::StreamPool>(num_streams);
-        memory_pool_ = std::make_shared<inference::MemoryPool>(input_size, output_size, num_streams);
-
-        async_infer_ptr_.reset(new inference::AsyncInfer<std::unordered_map<std::string, std::shared_ptr<char[]>>>(
-            context.get(), engine.get(), stream_pool_, memory_pool_,
-            input_names, output_names, input_size, output_size, {}));
-
-        async_infer_mat_.reset(new inference::AsyncInfer<std::unordered_map<std::string, cv::Mat>>(
-            context.get(), engine.get(), stream_pool_, memory_pool_,
-            input_names, output_names, input_size, output_size, output_shape));
-
-        std::cout << "Async inference enabled with " << num_streams << " streams" << std::endl;
     } else {
-        get_bindings();
         set_OutputBlob();
-        cudaStreamCreate(&stream);
+        stream = stream_pool_->acquire()->get();
+        std::cout << "Sync inference enabled with " << num_streams << " stream" << std::endl;
     }
 }
 TRTInfer::~TRTInfer()
 {
-    // destory stream (only for sync mode)
-    if (!enable_async_)
-    {
-        cudaStreamDestroy(stream);
-    }
-
-    // release cuda data
-    for (auto &data : inputBindings)
-        utility::safeCudaFree(data.second);
-    for (auto &data : outputBindings)
-        utility::safeCudaFree(data.second);
-
+    // MemoryPool and StreamPool handle cleanup automatically
     // No need to delete output_blob_ptr - smart pointers handle this automatically
 }
 
@@ -211,29 +202,9 @@ void TRTInfer::get_OutputNames()
     }
 }
 
-void TRTInfer::get_bindings()
-{
-    // allocate input memeory for cuda
-    for (int i = 0; i < input_names.size(); i++)
-    {
-        inputBindings[input_names[i]] = utility::safeCudaMalloc(input_size[input_names[i]]);
-    }
-    // allocate output memeory for cuda
-    for (int i = 0; i < output_names.size(); i++)
-    {
-        outputBindings[output_names[i]] = utility::safeCudaMalloc(output_size[output_names[i]]);
-    }
-}
-
 void TRTInfer::set_OutputBlob()
 {
-    // output set is fixed, so we can set it here
-    for (int i = 0; i < output_names.size(); i++)
-    {
-        context->setOutputTensorAddress(output_names[i].c_str(), outputBindings[output_names[i]]);
-    }
-
-    // allocate output memory for cpu, the input memory is from user or outside
+    // allocate output memory for cpu, input memory is from user or outside
     for (const auto &name : output_names)
     {
         // allocate memory using shared_ptr
@@ -249,10 +220,9 @@ std::unordered_map<std::string, std::shared_ptr<char[]>> TRTInfer::infer(const s
     {
         const std::string &key = input_data.first;
         void *cpu_ptr = input_data.second;
-        auto iter = inputBindings.find(key);
-        if (iter != inputBindings.end())
+        void *cuda_ptr = memory_pool_->get_input_binding(key, 0);
+        if (cuda_ptr)
         {
-            void *cuda_ptr = iter->second;
             size_t data_size = input_size[key];
 
             cudaError_t err = cudaMemcpyAsync(cuda_ptr, cpu_ptr, data_size, cudaMemcpyHostToDevice, stream);
@@ -266,6 +236,15 @@ std::unordered_map<std::string, std::shared_ptr<char[]>> TRTInfer::infer(const s
         }
     }
 
+    // set output tensor addresses
+    for (const auto &name : output_names)
+    {
+        void *cuda_ptr = memory_pool_->get_output_binding(name, 0);
+        if (cuda_ptr)
+        {
+            context->setOutputTensorAddress(name.c_str(), cuda_ptr);
+        }
+    }
 
     // async execute
     context->enqueueV3(stream);
@@ -276,10 +255,10 @@ std::unordered_map<std::string, std::shared_ptr<char[]>> TRTInfer::infer(const s
         size_t datasize = output_size[names];
         // Get raw pointer from shared_ptr for cudaMemcpy
         void* ptr = static_cast<void*>(output_blob_ptr[names].get());
-        const auto &iter = outputBindings.find(names);
-        if (iter != outputBindings.end())
+        void *cuda_ptr = memory_pool_->get_output_binding(names, 0);
+        if (cuda_ptr)
         {
-            cudaError_t err = cudaMemcpyAsync(ptr, iter->second, datasize, cudaMemcpyDeviceToHost);
+            cudaError_t err = cudaMemcpyAsync(ptr, cuda_ptr, datasize, cudaMemcpyDeviceToHost, stream);
             if (err != cudaSuccess)
             {
                 std::cerr << "CUDA memcpyAsync failed: " << cudaGetErrorString(err) << std::endl;
@@ -305,10 +284,9 @@ std::unordered_map<std::string, cv::Mat> TRTInfer::infer(const std::unordered_ma
         // Type check, may conversion
         if (utility::typeCv2Rt(cpu_ptr.type()) != engine->getTensorDataType(key.c_str()))
             cpu_ptr.convertTo(cpu_ptr, utility::typeRt2Cv(engine->getTensorDataType(key.c_str())));
-        auto iter = inputBindings.find(key);
-        if (iter != inputBindings.end())
+        void *cuda_ptr = memory_pool_->get_input_binding(key, 0);
+        if (cuda_ptr)
         {
-            void *cuda_ptr = iter->second;
             size_t data_size = input_size[key];
 
             cudaError_t err = cudaMemcpyAsync(cuda_ptr, static_cast<void*>(cpu_ptr.data), data_size, cudaMemcpyHostToDevice, stream);
@@ -317,24 +295,34 @@ std::unordered_map<std::string, cv::Mat> TRTInfer::infer(const std::unordered_ma
                 std::cerr << "CUDA memcpyAsync failed: " << cudaGetErrorString(err) << std::endl;
                 throw std::runtime_error(cudaGetErrorString(err));
             }
-            // set the input tensor
+            // set input tensor
             context->setInputTensorAddress(key.c_str(), cuda_ptr);
+        }
+    }
+
+    // set output tensor addresses
+    for (const auto &name : output_names)
+    {
+        void *cuda_ptr = memory_pool_->get_output_binding(name, 0);
+        if (cuda_ptr)
+        {
+            context->setOutputTensorAddress(name.c_str(), cuda_ptr);
         }
     }
 
     // async execute
     context->enqueueV3(stream);
 
-    // copy the gpu data to cpu data
+    // copy gpu data to cpu data
     for (const auto &names : output_names)
     {
         size_t datasize = output_size[names];
         // Get raw pointer from shared_ptr for cudaMemcpy
         void* ptr = static_cast<void*>(output_blob_ptr[names].get());
-        const auto &iter = outputBindings.find(names);
-        if (iter != outputBindings.end())
+        void *cuda_ptr = memory_pool_->get_output_binding(names, 0);
+        if (cuda_ptr)
         {
-            cudaError_t err = cudaMemcpyAsync(ptr, iter->second, datasize, cudaMemcpyDeviceToHost);
+            cudaError_t err = cudaMemcpyAsync(ptr, cuda_ptr, datasize, cudaMemcpyDeviceToHost, stream);
             if (err != cudaSuccess)
             {
                 std::cerr << "CUDA memcpyAsync failed: " << cudaGetErrorString(err) << std::endl;
@@ -343,43 +331,35 @@ std::unordered_map<std::string, cv::Mat> TRTInfer::infer(const std::unordered_ma
         }
     }
 
-    // waiting for the stream
+    // waiting for stream
     cudaStreamSynchronize(stream);
-    
-    // Construct cv::Mat from shared_ptr (deep copy to avoid dangling pointers)
+
+    // Convert output data to cv::Mat
     std::unordered_map<std::string, cv::Mat> output_blob;
-    for (const auto &names : output_names)
+    for (const auto &name : output_names)
     {
-        // First create cv::Mat using the shared_ptr data
-        cv::Mat temp(
-            output_shape[names].size(),
-            output_shape[names].data(),
-            utility::typeRt2Cv(engine->getTensorDataType(names.c_str())),
-            output_blob_ptr[names].get()
-        );
-        
-        // Deep copy to ensure independent memory management
-        // This prevents dangling pointers when output_ptr is reused
-        output_blob[names] = temp.clone();
+        nvinfer1::DataType dtype = engine->getTensorDataType(name.c_str());
+        const auto &shape = output_shape[name];
+        output_blob[name] = cv::Mat(shape.size(), shape.data(), utility::typeRt2Cv(dtype), output_blob_ptr[name].get()).clone();
     }
-    
+
     return output_blob;
 }
 
-std::future<std::unordered_map<std::string, std::shared_ptr<char[]>>> 
+std::future<std::unordered_map<std::string, std::shared_ptr<char[]>>>
 TRTInfer::infer_async(const std::unordered_map<std::string, void *> &input_blob)
 {
     if (!enable_async_ || !async_infer_ptr_) {
-        throw std::runtime_error("Async inference not enabled. Use constructor with num_streams parameter.");
+        throw std::runtime_error("Async inference not enabled or use_cvMat is set to true. Use constructor with enable_async=true and use_cvMat=false.");
     }
     return async_infer_ptr_->infer_async(input_blob);
 }
 
-std::future<std::unordered_map<std::string, cv::Mat>> 
+std::future<std::unordered_map<std::string, cv::Mat>>
 TRTInfer::infer_async(const std::unordered_map<std::string, cv::Mat> &input_blob)
 {
     if (!enable_async_ || !async_infer_mat_) {
-        throw std::runtime_error("Async inference not enabled. Use constructor with num_streams parameter.");
+        throw std::runtime_error("Async inference not enabled or use_cvMat is set to false. Use constructor with enable_async=true and use_cvMat=true.");
     }
     return async_infer_mat_->infer_async(input_blob);
 }
@@ -388,7 +368,7 @@ void TRTInfer::infer_with_callback(const std::unordered_map<std::string, void *>
                                    std::function<void(const std::unordered_map<std::string, std::shared_ptr<char[]>>&)> callback)
 {
     if (!enable_async_ || !async_infer_ptr_) {
-        throw std::runtime_error("Async inference not enabled. Use constructor with num_streams parameter.");
+        throw std::runtime_error("Async inference not enabled or use_cvMat is set to true. Use constructor with enable_async=true and use_cvMat=false.");
     }
     async_infer_ptr_->infer_with_callback(input_blob, callback);
 }
@@ -397,7 +377,7 @@ void TRTInfer::infer_with_callback(const std::unordered_map<std::string, cv::Mat
                                    std::function<void(const std::unordered_map<std::string, cv::Mat>&)> callback)
 {
     if (!enable_async_ || !async_infer_mat_) {
-        throw std::runtime_error("Async inference not enabled. Use constructor with num_streams parameter.");
+        throw std::runtime_error("Async inference not enabled or use_cvMat is set to false. Use constructor with enable_async=true and use_cvMat=true.");
     }
     async_infer_mat_->infer_with_callback(input_blob, callback);
 }

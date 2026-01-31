@@ -143,6 +143,9 @@ if(BUILD_EXAMPLES)
     
     add_executable(s2m2_async s2m2_async.cc)
     target_link_libraries(s2m2_async trtemplate)
+
+    add_executable(yolo_benchmark yolo_benchmark.cc)
+    target_link_libraries(yolo_benchmark trtemplate)
 endif()
 
 # ============================================================================
