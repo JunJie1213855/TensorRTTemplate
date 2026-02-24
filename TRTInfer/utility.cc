@@ -30,7 +30,7 @@ namespace utility
         ptr = nullptr; // Set pointer to nullptr after freeing
         return true;
     }
-    float getTypebytes(const nvinfer1::DataType &type)
+    size_t getTypebytes(const nvinfer1::DataType &type)
     {
         switch (type)
         {
@@ -47,7 +47,7 @@ namespace utility
         case nvinfer1::DataType::kINT32:
             return 4;
         case nvinfer1::DataType::kINT4:
-            return 0.5;
+            return 1;  // INT4 packed, minimum 1 byte for storage
         case nvinfer1::DataType::kINT64:
             return 8;
         case nvinfer1::DataType::kINT8:
@@ -55,11 +55,12 @@ namespace utility
         case nvinfer1::DataType::kUINT8:
             return 1;
         }
+        return 0;  // Unknown type
     }
 
-    int getTensorbytes(const nvinfer1::Dims &dim, const nvinfer1::DataType &type)
+    size_t getTensorbytes(const nvinfer1::Dims &dim, const nvinfer1::DataType &type)
     {
-        int64_t size = 1;
+        size_t size = 1;
         for (int i = 0; i < dim.nbDims; i++)
             size *= dim.d[i];
         return size * getTypebytes(type);

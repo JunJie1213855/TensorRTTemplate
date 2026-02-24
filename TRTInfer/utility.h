@@ -27,14 +27,14 @@ namespace utility
      *@param type The basic types of  tensorrt
      *@return byte count
      */
-    TRTInfer_API float getTypebytes(const nvinfer1::DataType &type);
+    TRTInfer_API size_t getTypebytes(const nvinfer1::DataType &type);
 
     /**
      *@brief Input the dimensions and basic types of a matrix, and output the total number of bytes in this matrix
      *@param dim Dimension of  dim matrix
      *@param type The basic data types of  TensorRT
      */
-    TRTInfer_API int getTensorbytes(const nvinfer1::Dims &dim, const nvinfer1::DataType &type);
+    TRTInfer_API size_t getTensorbytes(const nvinfer1::Dims &dim, const nvinfer1::DataType &type);
 
     /**
      * @brief convert the cv type to nvidia tensorrt type
