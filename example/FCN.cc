@@ -1,12 +1,14 @@
 #include "TRTinfer.h"
+#include "benchmark.h"
 #include <opencv2/opencv.hpp>
 #include <random>
-namespace SegFormer
+
+namespace FCN
 {
     std::unordered_map<std::string, cv::Mat> preprocess(const cv::Mat &img)
     {
         cv::Mat imgc = img.clone();
-        
+
         // Convert BGR to RGB as specified in config (bgr_to_rgb=True)
         cv::Mat rgb_img;
         cv::cvtColor(imgc, rgb_img, cv::COLOR_BGR2RGB);
@@ -78,29 +80,41 @@ namespace SegFormer
 
 int main(int argc, char *argv[])
 {
-    // model
-    TRTInfer model("segformer.engine");
     // image
-    cv::Mat image = cv::imread("/root/code/python/ImageSegment/mmsegmentation/demo/demo.png");
+    cv::Mat image = cv::imread("demo/bus.jpg");
+
+    if (image.empty())
+    {
+        std::cerr << "Error: Could not load image from demo/bus.jpg" << std::endl;
+        return -1;
+    }
 
     // preprocess
-    auto input_blob = SegFormer::preprocess(image);
+    auto input_blob = FCN::preprocess(image);
+
+    // model
+    TRTInfer model("fcn.engine");
+
+    // Run benchmark with warmup
+    std::cout << "\n=== FCN Semantic Segmentation Benchmark ===" << std::endl;
+    Benchmark::runModel(model, input_blob, 10, 100);
+    std::cout << "\n=== Running single inference for visualization ===" << std::endl;
 
     // inference
     auto output_blob = model(input_blob);
+
     // reshape 1x1x512x512 to 512 x 512
     cv::Mat mat2d = output_blob["output"].reshape(0, 512).clone();
 
     // convert unsigned char type
     mat2d.convertTo(mat2d, CV_8U);
-    // cv::resize(mat2d, mat2d, image.size(), 0, 0, cv::INTER_NEAREST);
 
     cv::Mat viz, mask, image_512;
-    // apply color map
-    viz = SegFormer::visualizeSegmentation(mat2d);
-    // for mask
-
     cv::resize(image, image_512, cv::Size(512, 512));
+    // apply color map
+    viz = FCN::visualizeSegmentation(mat2d);
+
+    // for mask
     cv::addWeighted(image_512, 0.7, viz, 0.3, 0, mask);
 
     // show result
@@ -108,5 +122,5 @@ int main(int argc, char *argv[])
     cv::imshow("mask", mask);
     cv::waitKey();
 
-    return 1;
+    return 0;
 }

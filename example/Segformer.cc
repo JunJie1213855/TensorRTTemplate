@@ -1,7 +1,9 @@
 #include "TRTinfer.h"
+#include "benchmark.h"
 #include <opencv2/opencv.hpp>
 #include <random>
-namespace FCN
+
+namespace SegFormer
 {
     std::unordered_map<std::string, cv::Mat> preprocess(const cv::Mat &img)
     {
@@ -78,16 +80,29 @@ namespace FCN
 
 int main(int argc, char *argv[])
 {
-    // model
-    TRTInfer model("fcn.engine");
     // image
-    cv::Mat image = cv::imread("demo/bus.jpg");
+    cv::Mat image = cv::imread("demo/image.png");
+
+    if (image.empty())
+    {
+        std::cerr << "Error: Could not load image from demo/image.png" << std::endl;
+        return -1;
+    }
 
     // preprocess
-    auto input_blob = FCN::preprocess(image);
+    auto input_blob = SegFormer::preprocess(image);
+
+    // model
+    TRTInfer model("segformer.engine");
+
+    // Run benchmark with warmup
+    std::cout << "\n=== SegFormer Semantic Segmentation Benchmark ===" << std::endl;
+    Benchmark::runModel(model, input_blob, 10, 100);
+    std::cout << "\n=== Running single inference for visualization ===" << std::endl;
 
     // inference
     auto output_blob = model(input_blob);
+
     // reshape 1x1x512x512 to 512 x 512
     cv::Mat mat2d = output_blob["output"].reshape(0, 512).clone();
 
@@ -95,11 +110,11 @@ int main(int argc, char *argv[])
     mat2d.convertTo(mat2d, CV_8U);
 
     cv::Mat viz, mask, image_512;
-    cv::resize(image, image_512, cv::Size(512, 512));
     // apply color map
-    viz = FCN::visualizeSegmentation(mat2d);
+    viz = SegFormer::visualizeSegmentation(mat2d);
 
     // for mask
+    cv::resize(image, image_512, cv::Size(512, 512));
     cv::addWeighted(image_512, 0.7, viz, 0.3, 0, mask);
 
     // show result
@@ -107,5 +122,5 @@ int main(int argc, char *argv[])
     cv::imshow("mask", mask);
     cv::waitKey();
 
-    return 1;
+    return 0;
 }

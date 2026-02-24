@@ -1,6 +1,8 @@
 #include "TRTinfer.h"
+#include "benchmark.h"
 #include <opencv2/opencv.hpp>
 #include <chrono>
+
 std::unordered_map<std::string, cv::Mat> preprocess(cv::Mat &left, cv::Mat &right)
 {
     std::unordered_map<std::string, cv::Mat> input_blob;
@@ -37,6 +39,7 @@ std::unordered_map<std::string, cv::Mat> preprocess(cv::Mat &left, cv::Mat &righ
                                                        cv::Scalar(), true, false);
     return input_blob;
 }
+
 void postprocess(const cv::Mat &disp, cv::Mat &disp_vis)
 {
     // to visualization
@@ -53,10 +56,23 @@ int main(int argc, char *argv[])
     cv::Mat left = cv::imread("rect_left.png");
     cv::Mat right = cv::imread("rect_right.png");
 
+    if (left.empty() || right.empty())
+    {
+        std::cerr << "Error: Could not load input images!" << std::endl;
+        return -1;
+    }
+
     // preprocess
     auto input_blob = preprocess(left, right);
+
     // model
     TRTInfer model("S2M2.engine");
+
+    // Run benchmark with warmup
+    std::cout << "\n=== S2M2 Stereo Matching Benchmark ===" << std::endl;
+    Benchmark::runModel(model, input_blob, 10, 100);
+    std::cout << "\n=== Running single inference for visualization ===" << std::endl;
+
     auto output_blob = model(input_blob); // inference
 
     cv::Mat dst, dst_conf;
@@ -66,5 +82,5 @@ int main(int argc, char *argv[])
     cv::imshow("disp", dst);
     cv::imshow("disp conf", dst_conf);
     cv::waitKey();
-    return 1;
+    return 0;
 }

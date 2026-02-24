@@ -1,4 +1,5 @@
 #include "TRTinfer.h"
+#include "benchmark.h"
 #include <opencv2/opencv.hpp>
 #include <random>
 
@@ -95,23 +96,40 @@ namespace YOLO
 
 int main(int argc, char *argv[])
 {
-    // model
-    TRTInfer model("./yolov8n.engine");
     // image
     cv::Mat image = cv::imread("./demo/bus.jpg");
+
+    if (image.empty())
+    {
+        std::cerr << "Error: Could not load image from ./demo/bus.jpg" << std::endl;
+        return -1;
+    }
+
     // for rescale factor
     float scalew = static_cast<float>(image.size().width) / 480.f;
     float scaleh = static_cast<float>(image.size().height) / 640.f;
     cv::Size2f scale_factor(scalew, scaleh);
+
     // preprocess
     auto input_blob = YOLO::preprocess(image);
+
+    // model
+    TRTInfer model("./yolov8n.engine");
+
+    // Run benchmark with warmup
+    std::cout << "\n=== YOLOv8 Object Detection Benchmark ===" << std::endl;
+    Benchmark::runModel(model, input_blob, 10, 100);
+    std::cout << "\n=== Running single inference for visualization ===" << std::endl;
+
     // inference
     auto output_blob = model(input_blob);
+
     // post process
     cv::Mat result = YOLO::postprocess(output_blob["output0"], image, scale_factor);
+
     // show result
     cv::imshow("output", result);
     cv::waitKey();
 
-    return 1;
+    return 0;
 }

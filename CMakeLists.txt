@@ -65,32 +65,32 @@ PUBLIC
 )
 
 
-add_executable(igev IGEV.cc)
+add_executable(igev example/IGEV.cc)
 target_link_libraries(igev
     trtemplate
 )
 
-add_executable(yolo YOLO.cc)
+add_executable(yolo example/YOLO.cc)
 target_link_libraries(yolo
     trtemplate
 )
 
 
-add_executable(fcn FCN.cc)
+add_executable(fcn example/FCN.cc)
 target_link_libraries(fcn
     trtemplate
 )
 
 
 
-add_executable(segformer Segformer.cc)
+add_executable(segformer example/Segformer.cc)
 target_link_libraries(segformer
     trtemplate
 )
 
 
 
-add_executable(s2m2 s2m2.cc)
+add_executable(s2m2 example/s2m2.cc)
 target_link_libraries(s2m2
     trtemplate
 )
