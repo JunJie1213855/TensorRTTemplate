@@ -94,3 +94,13 @@ add_executable(s2m2 example/s2m2.cc)
 target_link_libraries(s2m2
     trtemplate
 )
+
+add_executable(liteanystereo example/LiteAnyStereo.cc)
+target_link_libraries(liteanystereo
+    trtemplate
+)
+
+add_executable(liteanystereo_video example/LiteAnyStereoVideo.cc)
+target_link_libraries(liteanystereo_video
+    trtemplate
+)

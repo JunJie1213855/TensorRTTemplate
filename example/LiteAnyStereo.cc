@@ -170,7 +170,54 @@ namespace LiteAnyStereo
             vis_color.setTo(cv::Scalar(0, 0, 0), invalid_mask);
         }
 
-        return vis_color;
+              << "  --normalize           Normalize input to [0, 1] range (default: [0, 255])\n"
+              << "  --help                Show this help message\n"
+              << "\nExample:\n"
+              << "  " << program_name << " --left_img left.png --right_img right.png --engine model.engine\n"
+              << std::endl;
+}
+
+
+int main(int argc, char *argv[])
+{
+    // Default parameters
+    std::string left_img_path = "rect_left.png";
+    std::string right_img_path = "rect_right.png";
+    std::string engine_file = "liteanystereo.engine";
+    std::string output_dir = "./output";
+    cv::Size target_size;  // Empty means use original size
+    bool benchmark_mode = false;
+    int warmup_runs = 5;
+    int benchmark_runs = 50;
+    bool enable_display = true;
+    bool debug_mode = false;  // Enable debug output
+    bool normalize_input = false;  // Normalize input to [0, 1] range
+
+    // Parse command line arguments
+    for (int i = 1; i < argc; ++i)
+    {
+        std::string arg = argv[i];
+
+        if (arg == "--help" || arg == "-h")
+        {
+            printUsage(argv[0]);
+            return 0;
+        }
+        else if (arg == "--left_img" && i + 1 < argc)
+        {
+            left_img_path = argv[++i];
+        }
+        else if (arg == "--right_img" && i + 1 < argc)
+        {
+            right_img_path = argv[++i];
+        }
+        else if (arg == "--engine" && i + 1 < argc)
+        {
+            engine_file = argv[++i];
+        }
+        else if (arg == "--output_dir" && i + 1 < argc)
+        {
+            output_dir = argv[++i];        return vis_color;
     }
 
     /**
@@ -219,54 +266,7 @@ void printUsage(const char *program_name)
               << "  --runs <n>            Benchmark runs (default: 50)\n"
               << "  --no_display          Disable display window\n"
               << "  --debug, -d           Enable debug mode (save intermediate outputs)\n"
-              << "  --normalize           Normalize input to [0, 1] range (default: [0, 255])\n"
-              << "  --help                Show this help message\n"
-              << "\nExample:\n"
-              << "  " << program_name << " --left_img left.png --right_img right.png --engine model.engine\n"
-              << std::endl;
-}
 
-
-int main(int argc, char *argv[])
-{
-    // Default parameters
-    std::string left_img_path = "rect_left.png";
-    std::string right_img_path = "rect_right.png";
-    std::string engine_file = "liteanystereo.engine";
-    std::string output_dir = "./output";
-    cv::Size target_size;  // Empty means use original size
-    bool benchmark_mode = false;
-    int warmup_runs = 5;
-    int benchmark_runs = 50;
-    bool enable_display = true;
-    bool debug_mode = false;  // Enable debug output
-    bool normalize_input = false;  // Normalize input to [0, 1] range
-
-    // Parse command line arguments
-    for (int i = 1; i < argc; ++i)
-    {
-        std::string arg = argv[i];
-
-        if (arg == "--help" || arg == "-h")
-        {
-            printUsage(argv[0]);
-            return 0;
-        }
-        else if (arg == "--left_img" && i + 1 < argc)
-        {
-            left_img_path = argv[++i];
-        }
-        else if (arg == "--right_img" && i + 1 < argc)
-        {
-            right_img_path = argv[++i];
-        }
-        else if (arg == "--engine" && i + 1 < argc)
-        {
-            engine_file = argv[++i];
-        }
-        else if (arg == "--output_dir" && i + 1 < argc)
-        {
-            output_dir = argv[++i];
         }
         else if (arg == "--target_size" && i + 1 < argc)
         {

@@ -44,6 +44,13 @@ public:
      */
     std::unordered_map<std::string, cv::Mat> operator()(const std::unordered_map<std::string, cv::Mat> &input_blob);
 
+    /**
+     * @brief Set input shape for dynamic batch inference
+     * @param input_name The name of the input tensor
+     * @param shape The shape to set (e.g., {batch_size, C, H, W})
+     */
+    void setInputShape(const std::string &input_name, const std::vector<int> &shape);
+
     ~TRTInfer();
 
 private:
@@ -55,7 +62,13 @@ private:
 
     void get_bindings();
 
+    void get_OptimizationProfiles();
+
     void set_OutputBlob();
+
+    size_t allocateDynamicMemory(const std::string &name, const nvinfer1::Dims &dims, nvinfer1::DataType dtype,
+                                 std::unordered_map<std::string, void *> &bindings,
+                                 std::unordered_map<std::string, size_t> &max_sizes);
 
     std::unordered_map<std::string, std::shared_ptr<char[]>> infer(const std::unordered_map<std::string, void *> &input_blob);
 
@@ -78,6 +91,11 @@ private:
     std::unordered_map<std::string, size_t> input_size, output_size;
     std::unordered_map<std::string, std::vector<int>> output_shape;
     cv::Size size;
+
+    // Dynamic shape support
+    std::unordered_map<std::string, std::vector<int>> current_input_shapes;  // Current input shapes
+    std::unordered_map<std::string, nvinfer1::Dims> input_min_dims, input_opt_dims, input_max_dims;  // Optimization profile dimensions
+    std::unordered_map<std::string, size_t> input_max_size, output_max_size;  // Maximum allocated memory sizes
 
     // bindings
     std::unordered_map<std::string, cv::Mat> input_Bindings, output_Bindings;
