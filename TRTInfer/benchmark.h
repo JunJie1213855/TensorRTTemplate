@@ -9,7 +9,6 @@
 #include <iomanip>
 #include <functional>
 #include "TRTinfer.h"
-
 /**
  * @brief Simple inference timing statistics
  */
@@ -56,7 +55,8 @@ public:
         std::cout << "\n========== Benchmark ==========" << std::endl;
         std::cout << "Warmup iterations: " << warmup_iterations << std::endl;
         std::cout << "Benchmark iterations: " << benchmark_iterations << std::endl;
-        std::cout << "==============================\n" << std::endl;
+        std::cout << "==============================\n"
+                  << std::endl;
 
         // Warmup phase
         std::cout << "Warming up..." << std::endl;
@@ -64,7 +64,8 @@ public:
         {
             infer_func();
         }
-        std::cout << "Warmup completed.\n" << std::endl;
+        std::cout << "Warmup completed.\n"
+                  << std::endl;
 
         // Benchmark phase
         std::cout << "Running benchmark..." << std::endl;
@@ -110,20 +111,20 @@ public:
      * @param benchmark_iterations Number of benchmark iterations
      * @return Timing statistics
      */
-    template<typename InputType>
-    static TimingStats runModel(TRTInfer& model,
-                                const std::unordered_map<std::string, InputType>& input_blob,
+    template <typename InputType>
+    static TimingStats runModel(TRTInfer &model,
+                                const std::unordered_map<std::string, InputType> &input_blob,
                                 int warmup_iterations = 10,
                                 int benchmark_iterations = 100)
     {
         return run(
-            [&model, &input_blob]() {
+            [&model, &input_blob]()
+            {
                 model(input_blob);
             },
             warmup_iterations,
-            benchmark_iterations
-        );
+            benchmark_iterations);
     }
 };
 
-#endif  // BENCHMARK_H
+#endif // BENCHMARK_H

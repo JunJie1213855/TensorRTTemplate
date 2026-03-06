@@ -46,8 +46,12 @@ include_directories(
 )
 # generate library
 add_library(trtemplate ${LIB_TYPE}
-    TRTInfer/TRTinfer.cc
-    TRTInfer/utility.cc
+    ${PROJECT_SOURCE_DIR}/TRTInfer/config.h
+    ${PROJECT_SOURCE_DIR}/TRTInfer/TRTinfer.h
+    ${PROJECT_SOURCE_DIR}/TRTInfer/benchmark.h
+    ${PROJECT_SOURCE_DIR}/TRTInfer/utility.h
+    ${PROJECT_SOURCE_DIR}/TRTInfer/TRTinfer.cc
+    ${PROJECT_SOURCE_DIR}/TRTInfer/utility.cc
 )
 
 # 为共享库添加BUILD_SHARED定义（用于Windows DLL导出）
