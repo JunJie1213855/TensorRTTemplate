@@ -10,6 +10,18 @@
 #include <opencv2/opencv.hpp>
 #include "config.h"
 
+/**
+ * @brief TensorShape 结构体 - 封装张量形状信息
+ */
+struct TensorShape
+{
+    int n = 0; // Batch
+    int c = 0; // Channel
+    int d = 0; // Depth
+    int h = 0; // Height
+    int w = 0; // Width
+};
+
 class TRTInfer_API TRTInfer
 {
 public:
@@ -44,17 +56,43 @@ public:
     // 析构函数必须在 .cc 文件中定义
     ~TRTInfer();
 
+    /**
+     * @brief 获取所有输入张量的名称
+     * @return 输入张量名称列表
+     */
+    std::vector<std::string> getInputNames() const;
+
+    /**
+     * @brief 获取所有输出张量的名称
+     * @return 输出张量名称列表
+     */
+    std::vector<std::string> getOutputNames() const;
+
+    /**
+     * @brief 获取指定输入张量的形状
+     * @param name 输入张量名称
+     * @return TensorShape 形状信息
+     */
+    TensorShape getInputShape(const std::string &name) const;
+
+    /**
+     * @brief 获取指定输出张量的形状
+     * @param name 输出张量名称
+     * @return TensorShape 形状信息
+     */
+    TensorShape getOutputShape(const std::string &name) const;
+
 private:
     class Impl;
     std::unique_ptr<Impl> pImpl;
 
     // 禁止拷贝
-    TRTInfer(const TRTInfer&) = delete;
-    TRTInfer& operator=(const TRTInfer&) = delete;
+    TRTInfer(const TRTInfer &) = delete;
+    TRTInfer &operator=(const TRTInfer &) = delete;
 
     // 允许移动
-    TRTInfer(TRTInfer&&) = default;
-    TRTInfer& operator=(TRTInfer&&) = default;
+    TRTInfer(TRTInfer &&) = default;
+    TRTInfer &operator=(TRTInfer &&) = default;
 };
 
 #endif

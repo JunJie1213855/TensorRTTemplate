@@ -50,14 +50,28 @@ public:
     // 动态设置输入形状（用于动态形状引擎）
     void setInputShape(const std::string &input_name, const std::vector<int> &shape);
 
+    // 公共 getter 方法（供 TRTInfer 公共接口使用）
+    std::vector<std::string> getInputNames() const { return input_names; }
+    std::vector<std::string> getOutputNames() const { return output_names; }
+    std::vector<int> getInputShapeVec(const std::string &name) const
+    {
+        auto it = current_input_shapes.find(name);
+        return (it != current_input_shapes.end()) ? it->second : std::vector<int>();
+    }
+    std::vector<int> getOutputShapeVec(const std::string &name) const
+    {
+        auto it = output_shape.find(name);
+        return (it != output_shape.end()) ? it->second : std::vector<int>();
+    }
+
 private:
     // 私有方法 - 初始化流程
-    void load_engine(const std::string &engine_path);        // 从文件加载 TensorRT 引擎
-    void get_InputNames();                                    // 获取所有输入张量名称和信息
-    void get_OutputNames();                                   // 获取所有输出张量名称和信息
-    void get_bindings();                                      // 为输入输出分配 CUDA 显存
-    void get_OptimizationProfiles();                          // 解析动态形状的优化配置文件
-    void set_OutputBlob();                                    // 设置输出张量的显存地址
+    void load_engine(const std::string &engine_path); // 从文件加载 TensorRT 引擎
+    void get_InputNames();                            // 获取所有输入张量名称和信息
+    void get_OutputNames();                           // 获取所有输出张量名称和信息
+    void get_bindings();                              // 为输入输出分配 CUDA 显存
+    void get_OptimizationProfiles();                  // 解析动态形状的优化配置文件
+    void set_OutputBlob();                            // 设置输出张量的显存地址
     // 动态内存分配：如果当前内存不足，重新分配更大的显存
     size_t allocateDynamicMemory(
         const std::string &name,
@@ -67,28 +81,28 @@ private:
         std::unordered_map<std::string, size_t> &max_sizes);
 
 private:
-    TRTInfer *parent_;                      // 指向父类的指针（用于回调）
+    TRTInfer *parent_; // 指向父类的指针（用于回调）
 
     // TensorRT 核心对象
-    std::unique_ptr<nvinfer1::IRuntime> runtime;      // 运行时，用于反序列化引擎
-    std::unique_ptr<nvinfer1::ICudaEngine> engine;    // CUDA 引擎，包含优化后的网络结构
+    std::unique_ptr<nvinfer1::IRuntime> runtime;          // 运行时，用于反序列化引擎
+    std::unique_ptr<nvinfer1::ICudaEngine> engine;        // CUDA 引擎，包含优化后的网络结构
     std::unique_ptr<nvinfer1::IExecutionContext> context; // 执行上下文，用于实际推理
-    cudaStream_t stream;                  // CUDA 流，用于异步操作
-    Logger logger;                        // 日志记录器
+    cudaStream_t stream;                                  // CUDA 流，用于异步操作
+    Logger logger;                                        // 日志记录器
 
     // 输出数据存储（主机端）
     std::unordered_map<std::string, std::shared_ptr<char[]>> output_blob_ptr;
 
     // 张量元数据
-    std::vector<std::string> input_names, output_names;           // 输入输出张量名称列表
+    std::vector<std::string> input_names, output_names;              // 输入输出张量名称列表
     std::unordered_map<std::string, size_t> input_size, output_size; // 张量字节大小
     std::unordered_map<std::string, std::vector<int>> output_shape;  // 输出张量形状
-    cv::Size size;                        // 图像尺寸（用于某些特定模型）
+    cv::Size size;                                                   // 图像尺寸（用于某些特定模型）
 
     // 动态形状支持相关
-    std::unordered_map<std::string, std::vector<int>> current_input_shapes; // 当前使用的输入形状
+    std::unordered_map<std::string, std::vector<int>> current_input_shapes;                         // 当前使用的输入形状
     std::unordered_map<std::string, nvinfer1::Dims> input_min_dims, input_opt_dims, input_max_dims; // MIN/OPT/MAX 形状
-    std::unordered_map<std::string, size_t> input_max_size, output_max_size; // 已分配的最大显存大小
+    std::unordered_map<std::string, size_t> input_max_size, output_max_size;                        // 已分配的最大显存大小
 
     // 显存绑定（设备端）
     std::unordered_map<std::string, cv::Mat> input_Bindings, output_Bindings; // 未使用的绑定
@@ -187,6 +201,52 @@ void TRTInfer::setInputShape(const std::string &input_name, const std::vector<in
     pImpl->setInputShape(input_name, shape);
 }
 
+// 辅助函数：将 vector 转为 TensorShape
+static TensorShape vectorToShape(const std::vector<int> &vec)
+{
+    TensorShape shape;
+    if (vec.size() == 4)
+    {
+        shape.d = 0;
+        shape.n = vec[0];
+        shape.c = vec[1];
+        shape.h = vec[2];
+        shape.w = vec[3];
+    } else {
+                
+        shape.n = vec[0];
+        shape.d = vec[1];
+        shape.c = vec[2];
+        shape.h = vec[3];
+        shape.w = vec[4];
+    }
+    return shape;
+}
+
+// 获取所有输入张量名称
+std::vector<std::string> TRTInfer::getInputNames() const
+{
+    return pImpl->getInputNames();
+}
+
+// 获取所有输出张量名称
+std::vector<std::string> TRTInfer::getOutputNames() const
+{
+    return pImpl->getOutputNames();
+}
+
+// 获取指定输入张量形状
+TensorShape TRTInfer::getInputShape(const std::string &name) const
+{
+    return vectorToShape(pImpl->getInputShapeVec(name));
+}
+
+// 获取指定输出张量形状
+TensorShape TRTInfer::getOutputShape(const std::string &name) const
+{
+    return vectorToShape(pImpl->getOutputShapeVec(name));
+}
+
 // ============================================================================
 // TRTInfer::Impl 实现
 // ============================================================================
@@ -194,19 +254,19 @@ TRTInfer::Impl::Impl(const std::string &engine_path, TRTInfer *parent)
     : parent_(parent), logger()
 {
     // 按正确顺序初始化引擎和相关资源
-    load_engine(engine_path);       // 1. 加载引擎文件
-    get_InputNames();                // 2. 获取输入张量信息
-    get_OutputNames();               // 3. 获取输出张量信息
-    get_OptimizationProfiles();      // 4. 解析动态形状配置
-    get_bindings();                  // 5. 分配 CUDA 显存
-    set_OutputBlob();                // 6. 设置输出地址
-    cudaStreamCreate(&stream);       // 7. 创建 CUDA 流
+    load_engine(engine_path);   // 1. 加载引擎文件
+    get_InputNames();           // 2. 获取输入张量信息
+    get_OutputNames();          // 3. 获取输出张量信息
+    get_OptimizationProfiles(); // 4. 解析动态形状配置
+    get_bindings();             // 5. 分配 CUDA 显存
+    set_OutputBlob();           // 6. 设置输出地址
+    cudaStreamCreate(&stream);  // 7. 创建 CUDA 流
 }
 
 // 析构函数：释放所有 CUDA 资源
 TRTInfer::Impl::~Impl()
 {
-    cudaStreamDestroy(stream);    // 销毁 CUDA 流
+    cudaStreamDestroy(stream); // 销毁 CUDA 流
 
     // 释放所有输入输出张量的 CUDA 显存
     for (auto &data : inputBindings)

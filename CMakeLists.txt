@@ -46,6 +46,8 @@ include_directories(
 )
 # generate library
 add_library(trtemplate ${LIB_TYPE}
+    ${PROJECT_SOURCE_DIR}/TRTInfer/StreamPool.h
+    ${PROJECT_SOURCE_DIR}/TRTInfer/StreamPool.cc
     ${PROJECT_SOURCE_DIR}/TRTInfer/config.h
     ${PROJECT_SOURCE_DIR}/TRTInfer/TRTinfer.h
     ${PROJECT_SOURCE_DIR}/TRTInfer/benchmark.h
