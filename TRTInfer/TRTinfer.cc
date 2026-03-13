@@ -212,8 +212,10 @@ static TensorShape vectorToShape(const std::vector<int> &vec)
         shape.c = vec[1];
         shape.h = vec[2];
         shape.w = vec[3];
-    } else {
-                
+    }
+    else
+    {
+
         shape.n = vec[0];
         shape.d = vec[1];
         shape.c = vec[2];
@@ -538,7 +540,7 @@ void TRTInfer::Impl::set_OutputBlob()
     }
 }
 
-// 推理函数：接收 void* 指针类型的输入数据，返回原始字节指针的输出
+// 推理函数：接收 void* 指针类型的输入数据，返回原始字节指针的输出，考虑使用 std::span<char> 替换
 // 流程：输入 H2D → 推理 → 输出 D2H
 std::unordered_map<std::string, std::shared_ptr<char[]>> TRTInfer::Impl::infer(
     const std::unordered_map<std::string, void *> &input_blob)
@@ -611,6 +613,21 @@ std::unordered_map<std::string, std::shared_ptr<char[]>> TRTInfer::Impl::infer(
         const auto &iter = outputBindings.find(names);
         if (iter != outputBindings.end())
         {
+            // 验证输出缓冲区大小是否足够
+            if (actual_size != output_size[names])
+            {
+                std::cerr << "[ERROR] Output buffer size insufficient for '" << names << "': "
+                          << "required " << actual_size << " bytes, "
+                          << "but only " << output_size[names] << " bytes allocated. "
+                          << "Output shape: ";
+                for (int i = 0; i < out_shape.nbDims; i++)
+                {
+                    std::cerr << out_shape.d[i] << (i < out_shape.nbDims - 1 ? "x" : "");
+                }
+                std::cerr << std::endl;
+                throw std::runtime_error("Output buffer size insufficient");
+            }
+
             cudaError_t err = cudaMemcpyAsync(ptr, iter->second, actual_size, cudaMemcpyDeviceToHost);
             if (err != cudaSuccess)
             {
@@ -651,6 +668,29 @@ std::unordered_map<std::string, cv::Mat> TRTInfer::Impl::infer(
                 current_dims.d[i] = current_input_shapes[key][i];
             }
             size_t data_size = utility::getTensorbytes(current_dims, engine->getTensorDataType(key.c_str()));
+
+            // 计算 cv::Mat 实际数据大小并验证
+            size_t mat_actual_size = cpu_ptr.total() * cpu_ptr.elemSize();
+            if (data_size != mat_actual_size)
+            {
+                std::cerr << "[ERROR] Input tensor size mismatch for '" << key << "': "
+                          << "required " << data_size << " bytes, "
+                          << "but cv::Mat has " << mat_actual_size << " bytes. "
+                          << "Mat shape: " << cpu_ptr.size[0] << "x" << cpu_ptr.size[1] << "x" << cpu_ptr.size[2] << "x" << cpu_ptr.size[3]
+                          << ", expected tensor shape: ";
+                for (size_t i = 0; i < current_input_shapes[key].size(); i++)
+                {
+                    std::cerr << current_input_shapes[key][i] << (i < current_input_shapes[key].size() - 1 ? "x" : "");
+                }
+                std::cerr << std::endl;
+                throw std::runtime_error("Input tensor size mismatch: cv::Mat capacity is smaller than required tensor size");
+            }
+
+            // 检查 cv::Mat 是否连续
+            if (!cpu_ptr.isContinuous())
+            {
+                std::cerr << "[WARNING] Input cv::Mat for '" << key << "' is not continuous, which may cause data corruption" << std::endl;
+            }
 
             // 异步复制：主机 → 设备
             cudaError_t err = cudaMemcpyAsync(cuda_ptr, static_cast<void *>(cpu_ptr.data), data_size, cudaMemcpyHostToDevice, stream);
@@ -702,6 +742,21 @@ std::unordered_map<std::string, cv::Mat> TRTInfer::Impl::infer(
         const auto &iter = outputBindings.find(names);
         if (iter != outputBindings.end())
         {
+            // 验证输出缓冲区大小是否足够
+            if (actual_size != output_size[names])
+            {
+                std::cerr << "[ERROR] Output buffer size insufficient for '" << names << "': "
+                          << "required " << actual_size << " bytes, "
+                          << "but only " << output_size[names] << " bytes allocated. "
+                          << "Output shape: ";
+                for (int i = 0; i < out_shape.nbDims; i++)
+                {
+                    std::cerr << out_shape.d[i] << (i < out_shape.nbDims - 1 ? "x" : "");
+                }
+                std::cerr << std::endl;
+                throw std::runtime_error("Output buffer size insufficient");
+            }
+
             cudaError_t err = cudaMemcpyAsync(ptr, iter->second, actual_size, cudaMemcpyDeviceToHost);
             if (err != cudaSuccess)
             {
@@ -711,7 +766,7 @@ std::unordered_map<std::string, cv::Mat> TRTInfer::Impl::infer(
         }
     }
 
-    // 等待所有 CUDA 操作完成
+    // 等待该stream流的所有 CUDA 操作完成
     cudaStreamSynchronize(stream);
 
     // ===== 第四阶段：将输出数据包装为 cv::Mat 格式返回 =====
