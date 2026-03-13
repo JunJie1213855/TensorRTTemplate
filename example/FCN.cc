@@ -3,6 +3,9 @@
 #include <opencv2/opencv.hpp>
 #include <random>
 
+using namespace TRT;
+
+
 namespace FCN
 {
     std::unordered_map<std::string, cv::Mat> preprocess(const cv::Mat &img)

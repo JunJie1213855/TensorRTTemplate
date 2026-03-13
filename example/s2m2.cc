@@ -2,7 +2,7 @@
 #include "benchmark.h"
 #include <opencv2/opencv.hpp>
 #include <chrono>
-
+using namespace TRT;
 std::unordered_map<std::string, cv::Mat> preprocess(cv::Mat &left, cv::Mat &right)
 {
     std::unordered_map<std::string, cv::Mat> input_blob;

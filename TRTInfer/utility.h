@@ -6,8 +6,24 @@
 #include <opencv2/core.hpp>
 #include "config.h"
 
+
 namespace utility
 {
+
+    // for
+    struct Defer
+    {
+        std::function<void()> func_;
+        Defer(std::function<void()> func)
+        {
+            func_ = func;
+        }
+        ~Defer()
+        {
+            func_();
+        }
+    };
+
     /**
      *@brief Safely Allocate GPU Memor
      *@param memSize The required number of GPU memory bytes for

@@ -4,7 +4,7 @@
 #include <fstream>
 #include <vector>
 #include <chrono>
-
+using namespace TRT;
 namespace LiteAnyStereo
 {
     // Padding information structure

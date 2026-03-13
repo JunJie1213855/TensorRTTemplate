@@ -2,7 +2,7 @@
 #include "benchmark.h"
 #include <opencv2/opencv.hpp>
 #include <random>
-
+using namespace TRT;
 namespace YOLO
 {
     struct Detection

@@ -1,7 +1,7 @@
 #include "TRTinfer.h"
 #include "benchmark.h"
 #include <opencv2/opencv.hpp>
-
+using namespace TRT;
 // 保持原始图像尺寸用于后处理还原
 struct OriginalSize
 {
@@ -83,11 +83,15 @@ std::unordered_map<std::string, cv::Mat> preprocess(const std::string &left_path
                                                     OriginalSize &orig_right)
 {
     // 目标尺寸 (与 Python 代码一致: 480x752)
-    // cv::Size target_size(target_shape.w, target_shape.h);
+    cv::Size target_size(752, 480);
 
     // 加载并预处理图像
     cv::Mat left_blob = loadImage(left_path);
     cv::Mat right_blob = loadImage(right_path);
+
+    // 有目标尺寸就修改
+    cv::resize(left_blob, left_blob, target_size);
+    cv::resize(right_blob, right_blob, target_size);
 
     // 填充到 32 的倍数
     cv::Mat left_padded = padImage(left_blob, orig_left);
@@ -141,7 +145,7 @@ int main(int argc, char *argv[])
     // 图像路径
     std::string left_path = "/root/code/C++/TensorRTTemplate/rect_left.png";
     std::string right_path = "/root/code/C++/TensorRTTemplate/rect_right.png";
-    std::string engine_path = "/root/code/python/StereoMatch/StereoAlgorithms/IGEV-Stereo/igev_720_1280.engine";
+    std::string engine_path = "/root/code/python/StereoMatch/StereoAlgorithms/IGEV-Stereo/model_480_752.engine";
 
     // 加载图像
     cv::Mat left = cv::imread(left_path);
@@ -156,7 +160,7 @@ int main(int argc, char *argv[])
     OriginalSize orig_left, orig_right;
 
     // 加载模型
-    TRTInfer model(engine_path);
+    TRTInfer model(engine_path, 8);
 
     // 输出尺寸预备
     std::vector<std::string> output_names = model.getOutputNames();
@@ -172,30 +176,47 @@ int main(int argc, char *argv[])
               << ", w=" << input_blob["left"].size.p[3] << ")" << std::endl;
     // 预热
     std::cout << "\n=== Warmup (10 iterations) ===" << std::endl;
+    std::vector<std::future<std::unordered_map<std::string, cv::Mat>>> results;
     for (int i = 0; i < 10; i++)
     {
-        model(input_blob);
+        results.emplace_back(model.PostQueue(input_blob));
     }
-
+    for (auto &result : results)
+    {
+        result.get();
+    }
+    results.clear();
     // 推理
     std::cout << "\n=== Running inference ===" << std::endl;
     auto start = std::chrono::high_resolution_clock::now();
-    auto output_blob = model(input_blob);
+    for (int i = 0; i < 100; i++)
+    {
+        results.emplace_back(model.PostQueue(input_blob));
+    }
+    for (auto &result : results)
+    {
+        result.get();
+    }
+    // auto output_blob = model(input_blob);
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    std::cout << "Inference time: " << duration.count() << " ms" << std::endl;
+    std::cout << "Inference time: " << duration.count() / 100 << " ms" << std::endl;
 
     // 后处理
-    cv::Mat disp_vis;
-    postprocess(output_blob["disparity"].reshape(1, outputshape.h), orig_left, disp_vis);
+    // cv::Mat disp_vis;
+    // for (auto &result : results)
+    // {
+    //     postprocess(result.get()["disparity"].reshape(1, outputshape.h), orig_left, disp_vis);
+    //     // postprocess(output_blob["disparity"].reshape(1, outputshape.h), orig_left, disp_vis);
 
-    // 保存结果
-    cv::imwrite("/root/code/C++/TensorRTTemplate/disp_output.png", disp_vis);
-    std::cout << "Saved disparity visualization to disp_output.png" << std::endl;
+    //     // 保存结果
+    //     // cv::imwrite("/root/code/C++/TensorRTTemplate/disp_output.png", disp_vis);
+    //     std::cout << "Saved disparity visualization to disp_output.png" << std::endl;
 
-    // 显示
-    cv::imshow("Disparity", disp_vis);
-    cv::waitKey(0);
+    //     // 显示
+    //     cv::imshow("Disparity", disp_vis);
+    //     cv::waitKey(300);
+    // }
 
     return 0;
 }

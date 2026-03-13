@@ -112,7 +112,7 @@ public:
      * @return Timing statistics
      */
     template <typename InputType>
-    static TimingStats runModel(TRTInfer &model,
+    static TimingStats runModel(TRT::TRTInfer &model,
                                 const std::unordered_map<std::string, InputType> &input_blob,
                                 int warmup_iterations = 10,
                                 int benchmark_iterations = 100)
