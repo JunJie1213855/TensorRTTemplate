@@ -143,8 +143,8 @@ void postprocess(const cv::Mat &disp, const OriginalSize &orig_size, cv::Mat &di
 int main(int argc, char *argv[])
 {
     // 图像路径
-    std::string left_path = "/root/code/C++/TensorRTTemplate/rect_left.png";
-    std::string right_path = "/root/code/C++/TensorRTTemplate/rect_right.png";
+    std::string left_path = "./demo/left.png";
+    std::string right_path = "./demo/right.png";
     std::string engine_path = "/root/code/python/StereoMatch/StereoAlgorithms/IGEV-Stereo/model_480_752.engine";
 
     // 加载图像
@@ -193,9 +193,10 @@ int main(int argc, char *argv[])
     {
         results.emplace_back(model.PostQueue(input_blob));
     }
+    cv::Mat r;
     for (auto &result : results)
     {
-        result.get();
+        r = result.get()["disparity"];
     }
     // auto output_blob = model(input_blob);
     auto end = std::chrono::high_resolution_clock::now();
@@ -203,20 +204,16 @@ int main(int argc, char *argv[])
     std::cout << "Inference time: " << duration.count() / 100 << " ms" << std::endl;
 
     // 后处理
-    // cv::Mat disp_vis;
-    // for (auto &result : results)
-    // {
-    //     postprocess(result.get()["disparity"].reshape(1, outputshape.h), orig_left, disp_vis);
-    //     // postprocess(output_blob["disparity"].reshape(1, outputshape.h), orig_left, disp_vis);
+    cv::Mat disp_vis;
+    postprocess(r.reshape(1, outputshape.h), orig_left, disp_vis);
+    // postprocess(output_blob["disparity"].reshape(1, outputshape.h), orig_left, disp_vis);
 
-    //     // 保存结果
-    //     // cv::imwrite("/root/code/C++/TensorRTTemplate/disp_output.png", disp_vis);
-    //     std::cout << "Saved disparity visualization to disp_output.png" << std::endl;
+    // 保存结果
+    cv::imwrite("./demo/disp_output.png", disp_vis);
+    std::cout << "Saved disparity visualization to disp_output.png" << std::endl;
 
-    //     // 显示
-    //     cv::imshow("Disparity", disp_vis);
-    //     cv::waitKey(300);
-    // }
-
+    // 显示
+    cv::imshow("Disparity", disp_vis);
+    cv::waitKey();
     return 0;
 }

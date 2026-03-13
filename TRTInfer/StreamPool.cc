@@ -1,4 +1,5 @@
 #include "StreamPool.h"
+#include "utility.h"
 #include <iostream>
 /**
  * @brief 构造函数
@@ -81,6 +82,10 @@ StreamPool::~StreamPool()
         {
             delete pair.context;
         }
+        for (auto &bind : pair.outputBindings)
+            utility::safeCudaFree(bind.second);
+        for (auto &bind : pair.inputBindings)
+            utility::safeCudaFree(bind.second);
         pool_.pop(); // 弹出
     }
 

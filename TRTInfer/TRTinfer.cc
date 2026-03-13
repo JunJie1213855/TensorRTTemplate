@@ -75,10 +75,10 @@ public:
     // 重写 log 方法，过滤掉 INFO 级别的日志，只输出 WARNING 及以上级别
     void log(Severity severity, const char *msg) noexcept override
     {
-        // if (severity != Severity::kINFO)
-        // {
-        //     std::cout << msg << std::endl;
-        // }
+        if (severity != Severity::kINFO)
+        {
+            std::cout << msg << std::endl;
+        }
     }
 };
 
@@ -141,9 +141,6 @@ namespace TRT
         BlobType infer_task(const BlobType &input_blob);
 
     public:
-        // 动态设置输入形状（用于动态形状引擎）
-        void setInputShape(const std::string &input_name, const std::vector<int> &shape);
-
         // 公共 getter 方法（供 TRTInfer 公共接口使用）
         std::vector<std::string> getInputNames() const { return input_names; }
 
@@ -169,10 +166,6 @@ namespace TRT
 
         void get_OutputProperty(); // 获取所有输出张量名称和信息
 
-        void get_bindings(); // 为输入输出分配 CUDA 显存
-
-        void set_OutputBlob(); // 设置输出张量的显存地址
-
         void allocate_pair(); // 多线程：给streampool分配stream、context、mem
 
         void create_workthreads(); // 多线程：创建工作线程
@@ -182,14 +175,6 @@ namespace TRT
                            nvinfer1::IExecutionContext *context); // 为输入输出分配 CUDA 显存
 
         void allocOutBlob(std::unordered_map<std::string, std::shared_ptr<char[]>> &outputBlob); // 设置输出张量的显存地址
-
-        // 动态内存分配：如果当前内存不足，重新分配更大的显存
-        size_t allocateDynamicMemory(
-            const std::string &name,
-            const nvinfer1::Dims &dims,
-            nvinfer1::DataType dtype,
-            std::unordered_map<std::string, void *> &bindings,
-            std::unordered_map<std::string, size_t> &max_sizes);
 
         // 上传输入：类型转换、验证尺寸、拷贝至 GPU
         void uploadInput(const std::string &name,
@@ -211,27 +196,14 @@ namespace TRT
         std::unique_ptr<nvinfer1::IRuntime> runtime = nullptr;   // 运行时，用于反序列化引擎
         std::unique_ptr<nvinfer1::ICudaEngine> engine = nullptr; // CUDA 引擎，包含优化后的网络结构
 
-        // 动态形状支持相关
+        // 形状支持
         std::unordered_map<std::string, std::vector<int>> current_input_shapes; // 当前使用的输入形状
-        // std::unordered_map<std::string, nvinfer1::Dims> input_min_dims, input_opt_dims, input_max_dims; // MIN/OPT/MAX 形状
-        // std::unordered_map<std::string, size_t> input_max_size, output_max_size; // 已分配的最大显存大小
 
         // 张量元数据, 多线程模式下只读, 不需要加锁
         std::vector<std::string> input_names, output_names;              // 输入输出张量名称列表
         std::unordered_map<std::string, size_t> input_size, output_size; // 张量字节大小
         std::unordered_map<std::string, std::vector<int>> output_shape;  // 输出张量形状
-        cv::Size size;                                                   // 图像尺寸（用于某些特定模型）
         Logger logger;                                                   // 日志记录器
-
-    private: // 单线程模式
-        // TensorRT 核心对象
-        std::unique_ptr<nvinfer1::IExecutionContext> context = nullptr; // 执行上下文，用于实际推理
-        cudaStream_t stream = nullptr;                                  // CUDA 流，用于异步操作
-
-        // 主机数据
-        std::unordered_map<std::string, std::shared_ptr<char[]>> output_blob_ptr; // CPU 内存指针映射
-        // 显存绑定（设备端 - GPU）
-        std::unordered_map<std::string, void *> inputBindings, outputBindings; // CUDA 显存指针映射
 
     private: // 多线程模式
         // 任务队列
@@ -265,40 +237,12 @@ namespace TRT
         return pImpl->infer(input_blob);
     }
 
-    // 设置动态输入形状的公共接口
-    void TRTInfer::setInputShape(const std::string &input_name, const std::vector<int> &shape)
-    {
-        pImpl->setInputShape(input_name, shape);
-    }
-
     std::future<BlobType> TRTInfer::PostQueue(const BlobType &input_blob)
     {
         return pImpl->PostQueue(input_blob);
     }
 
     // 辅助函数：将 vector 转为 TensorShape
-    static TensorShape vectorToShape(const std::vector<int> &vec)
-    {
-        TensorShape shape;
-        if (vec.size() == 4)
-        {
-            shape.d = 0;
-            shape.n = vec[0];
-            shape.c = vec[1];
-            shape.h = vec[2];
-            shape.w = vec[3];
-        }
-        else
-        {
-
-            shape.n = vec[0];
-            shape.d = vec[1];
-            shape.c = vec[2];
-            shape.h = vec[3];
-            shape.w = vec[4];
-        }
-        return shape;
-    }
 
     // 获取所有输入张量名称
     std::vector<std::string> TRTInfer::getInputNames() const
@@ -315,13 +259,13 @@ namespace TRT
     // 获取指定输入张量形状
     TensorShape TRTInfer::getInputShape(const std::string &name) const
     {
-        return vectorToShape(pImpl->getInputShapeVec(name));
+        return utility::vectorToShape(pImpl->getInputShapeVec(name));
     }
 
     // 获取指定输出张量形状
     TensorShape TRTInfer::getOutputShape(const std::string &name) const
     {
-        return vectorToShape(pImpl->getOutputShapeVec(name));
+        return utility::vectorToShape(pImpl->getOutputShapeVec(name));
     }
 
     // TRTInfer::Impl 实现
@@ -332,10 +276,8 @@ namespace TRT
         load_engine(engine_path); // 1. 加载引擎文件
         get_InputProperty();      // 2. 获取输入张量信息
         get_OutputProperty();     // 3. 获取输出张量信息
-        // get_bindings();           // 4. 分配 CUDA 显存
-        // set_OutputBlob();         // 5. 分配输出内存
-        allocate_pair();
-        create_workthreads();
+        allocate_pair();          // 4. 创建 stream、context、内存
+        create_workthreads();     // 5. 创建接收队列
     }
 
     // 析构函数：释放所有 CUDA 资源
@@ -347,14 +289,7 @@ namespace TRT
         // 等待线程结束
         for (auto &thread : thread_pool)
             thread.join();
-
-        cudaStreamDestroy(stream); // 销毁 CUDA 流
-
-        // 释放所有输入输出张量的 CUDA 显存
-        for (auto &data : inputBindings)
-            utility::safeCudaFree(data.second);
-        for (auto &data : outputBindings)
-            utility::safeCudaFree(data.second);
+        std::cout << "[ TRT释放 ]" << std::endl;
     }
 
     // 从文件加载 TensorRT 引擎并进行反序列化
@@ -416,7 +351,7 @@ namespace TRT
                 input_names.emplace_back(std::string(name));
                 // 计算并存储张量的字节大小
                 input_size[std::string(name)] = utility::getTensorbytes(engine->getTensorShape(name), engine->getTensorDataType(name));
-                
+
                 // 保存当前张量尺寸
                 nvinfer1::Dims dims = engine->getTensorShape(name);
                 std::vector<int> dim;
@@ -461,120 +396,28 @@ namespace TRT
                                        std::unordered_map<std::string, void *> &outputBindings,
                                        nvinfer1::IExecutionContext *context)
     {
+        // 在设备端预分配输入、输出缓冲区
         for (int i = 0; i < input_names.size(); i++)
         {
-            inputBindings[input_names[i]] = utility::safeCudaMalloc(input_size[input_names[i]]);   //
+            inputBindings[input_names[i]] = utility::safeCudaMalloc(input_size[input_names[i]]);   // 输入
             context->setInputTensorAddress(input_names[i].c_str(), inputBindings[input_names[i]]); // 上下文绑定地址
         }
         // 为每个输出张量分配显存
         for (int i = 0; i < output_names.size(); i++)
         {
-            outputBindings[output_names[i]] = utility::safeCudaMalloc(output_size[output_names[i]]);
-            context->setOutputTensorAddress(output_names[i].c_str(), outputBindings[output_names[i]]);
+            outputBindings[output_names[i]] = utility::safeCudaMalloc(output_size[output_names[i]]);   // 输出
+            context->setOutputTensorAddress(output_names[i].c_str(), outputBindings[output_names[i]]); // 上下文绑定地址
         }
     }
 
     void TRTInfer::Impl::allocOutBlob(std::unordered_map<std::string, std::shared_ptr<char[]>> &outputBlob)
     {
-        // 在主机端预分配输出数据缓冲区（用于接收推理结果）
+        // 在主机端CPU预分配输出数据缓冲区（用于接收推理结果）
         for (const auto &name : output_names)
         {
             size_t datasize = output_size[name];
             outputBlob[name] = std::shared_ptr<char[]>(new char[datasize]);
         }
-    }
-
-    // 为所有输入输出张量分配 CUDA 显存
-    void TRTInfer::Impl::get_bindings()
-    {
-        // 为每个输入张量分配显存
-        for (int i = 0; i < input_names.size(); i++)
-        {
-            inputBindings[input_names[i]] = utility::safeCudaMalloc(input_size[input_names[i]]);
-        }
-        // 为每个输出张量分配显存
-        for (int i = 0; i < output_names.size(); i++)
-        {
-            outputBindings[output_names[i]] = utility::safeCudaMalloc(output_size[output_names[i]]);
-        }
-    }
-
-    // 设置输出张量的显存地址，并在主机端预分配输出数据缓冲区
-    void TRTInfer::Impl::set_OutputBlob()
-    {
-        // 将输出张量的显存地址绑定到执行上下文
-        for (int i = 0; i < output_names.size(); i++)
-        {
-            context->setOutputTensorAddress(output_names[i].c_str(), outputBindings[output_names[i]]);
-        }
-
-        // 在主机端预分配输出数据缓冲区（用于接收推理结果）
-        for (const auto &name : output_names)
-        {
-            size_t datasize = output_size[name];
-            output_blob_ptr[name] = std::shared_ptr<char[]>(new char[datasize]);
-        }
-    }
-    // 动态设置输入张量的形状（用于动态形状推理）
-    // 需要在每次推理前调用，确保输入尺寸在 MIN-MAX 范围内
-    void TRTInfer::Impl::setInputShape(const std::string &input_name, const std::vector<int> &shape)
-    {
-        // 检查输入张量是否存在
-        if (current_input_shapes.find(input_name) == current_input_shapes.end())
-        {
-            std::cerr << "Input tensor '" << input_name << "' not found" << std::endl;
-            throw std::runtime_error("Input tensor not found");
-        }
-
-        // 构造 TensorRT 的 Dims 结构
-        nvinfer1::Dims dims;
-        dims.nbDims = shape.size();
-        for (size_t i = 0; i < shape.size(); i++)
-        {
-            dims.d[i] = shape[i];
-        }
-
-        // 设置执行上下文的输入形状（如果形状超出范围会返回 false）
-        if (!context->setInputShape(input_name.c_str(), dims))
-        {
-            std::cerr << "Failed to set input shape for '" << input_name << "'" << std::endl;
-            throw std::runtime_error("Failed to set input shape");
-        }
-
-        // 更新当前形状记录
-        current_input_shapes[input_name] = shape;
-        // 如果新形状需要更大内存，重新分配显存
-        allocateDynamicMemory(input_name, dims, engine->getTensorDataType(input_name.c_str()),
-                              inputBindings, input_size);
-    }
-
-    // 动态内存分配函数：检查当前显存是否足够，不足则重新分配
-    // 参数：name-张量名, dims-形状, dtype-数据类型, bindings-显存绑定, max_sizes-已分配的最大尺寸
-    size_t TRTInfer::Impl::allocateDynamicMemory(const std::string &name, const nvinfer1::Dims &dims,
-                                                 nvinfer1::DataType dtype,
-                                                 std::unordered_map<std::string, void *> &bindings,
-                                                 std::unordered_map<std::string, size_t> &max_sizes)
-    {
-        // 计算所需内存大小
-        size_t required_size = utility::getTensorbytes(dims, dtype);
-
-        // 如果当前内存不足，需要重新分配
-        if (required_size > max_sizes[name])
-        {
-            // 先释放旧内存
-            if (bindings.find(name) != bindings.end() && bindings[name] != nullptr)
-            {
-                utility::safeCudaFree(bindings[name]);
-            }
-
-            // 分配新内存
-            bindings[name] = utility::safeCudaMalloc(required_size);
-            max_sizes[name] = required_size;
-
-            std::cout << "Reallocated memory for '" << name << "': " << required_size << " bytes" << std::endl;
-        }
-
-        return required_size;
     }
 
     // 推理函数：接收 cv::Mat 类型的输入数据，自动处理类型转换，返回 cv::Mat 格式的输出
@@ -604,9 +447,9 @@ namespace TRT
         pair.context->enqueueV3(pair.stream);
 
         // 3. 处理输出：分配空间、拷贝至 CPU、包装为 cv::Mat
-
         downloadOutput(pair.outputBlobs, pair.stream, pair.context, pair.outputBindings);
-        // 等待线程操作完成
+        
+        // 等待cuda stream操作完成
         cudaStreamSynchronize(pair.stream);
 
         BlobType tmp_results;

@@ -10,22 +10,11 @@
 #include <future>
 #include <opencv2/opencv.hpp>
 #include "config.h"
+#include "utility.h"
 
 namespace TRT
 {
     using BlobType = std::unordered_map<std::string, cv::Mat>;
-
-    /**
-     * @brief TensorShape 结构体 - 封装张量形状信息
-     */
-    struct TensorShape
-    {
-        int n = 0; // Batch
-        int c = 0; // Channel
-        int d = 0; // Depth
-        int h = 0; // Height
-        int w = 0; // Width
-    };
 
     class TRTInfer_API TRTInfer
     {
@@ -56,13 +45,6 @@ namespace TRT
         ~TRTInfer();
 
     public:
-        /**
-         * @brief Set input shape for dynamic batch inference
-         * @param input_name The name of the input tensor
-         * @param shape The shape to set (e.g., {batch_size, C, H, W})
-         */
-        void setInputShape(const std::string &input_name, const std::vector<int> &shape);
-
         /**
          * @brief 获取所有输入张量的名称
          * @return 输入张量名称列表

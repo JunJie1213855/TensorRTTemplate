@@ -3,13 +3,25 @@
 ### 🛠️ Introduction
 This is a template library for TensorRT inference that supports OpenCV's cv:: Mat type data and can support multiple input and output data.
 
+- **Multi-Stream Concurrent Inference**: Multi-stream concurrency based on CUDA Streams, supporting multi-threaded asynchronous inference
+- **Asynchronous Queue Processing**: Task queue + worker thread pool, supporting high-concurrency inference requests
+- **Multi-Input/Output**: Use `std::unordered_map<std::string, cv::Mat>` to wrap multiple tensors
+- **Memory Reuse**: StreamPool manages CUDA Stream and Context pairs, with GPU memory reuse
+- **Cross-Platform**: Supports Windows (Visual Studio) and Linux (GCC/CMake)
+
+
 ### ✒️​ Environment
-* Windows 11 / Ubuntu20.04
-* Visual Studio 2022 ~ 2026 / GNU
-* CMake 3.20+
-* TensorRT 10.x
-* OpenCV > 4.5
-* Cuda 11.x / 12.x
+
+
+| Component | Version Requirement |
+|-----------|---------------------|
+| OS | Windows 11 / Ubuntu20.04|
+| compiler | Visual Studio 2022 ~ 2026 / GNU|
+| CUDA | 11.x / 12.x |
+| TensorRT | 10.x |
+| OpenCV | 4.5+ |
+| CMake | 3.20+ |
+| C++ | C++17 |
 
 ### ⚙️ Common Configuration Options
 
@@ -110,7 +122,31 @@ set(LIB_TYPE SHARED)  # Options: SHARED (.so) or STATIC
 
 
 ### ✨ Example
-First，download the onnx file of YOLOv8 and fcn from the link [GoogleDrive](https://drive.google.com/drive/folders/19UBgYWeEADKTA1w44HIDkzn2oPxKATOH?usp=drive_link).
+First，download the onnx file of YOLOv8 and fcn from the link [GoogleDrive](https://drive.google.com/drive/folders/19UBgYWeEADKTA1w44HIDkzn2oPxKATOH?usp=drive_link). Base API :
+```C++
+int main() {
+    // Load model (supports multi-threading configuration)
+    TRTInfer model("model.engine", 4);
+
+    // Read image
+    cv::Mat img = cv::imread("test.jpg");
+    cv::Mat blob = cv::dnn::blobFromImage(img, 1.0/255.0, cv::Size(640, 640));
+
+    // Wrap input (supports multiple inputs)
+    std::unordered_map<std::string, cv::Mat> input;
+    input["images"] = blob;
+
+    // Method 1: Synchronous inference
+    auto output = model(input);
+
+    // Method 2: Asynchronous inference (multi-threading queue)
+    auto future = model.PostQueue(input);
+    auto result = future.get();
+
+    return 0;
+}
+```
+
 
 #### YOLOv8 - Detection Example
 convert the onnx file to engien file like
@@ -148,13 +184,42 @@ cmake --build ./build --config release -j 12
 ```
 run
 ```bash
-./build/Release/example.exe
+./build/Release/fcn.exe
 # or linux
 ./build/fcn
 ```
 more detail code see FCN.cc.And Segformer is like this.
 
 ![alt text](demo/image-1.png)
+
+#### IGEV - Stereo Match Example
+
+convert the onnx file to engien file like
+```bash
+trtexec \ 
+--onnx=./pretrain/igev_480_752.onnx \
+--saveEngine=./igev_480_752.engine \
+--fp16
+```
+build this example by later command
+
+```bash
+cmake -S . -B build
+cmake --build ./build --config release -j 12
+```
+
+run
+```bash
+# windows
+./build/Release/igev.exe
+# or linux
+./build/igev
+```
+more detail code see IGEV.cc. The result of algo is like this.
+* left.png
+![alt text](demo/left.png)
+* disp.png
+![alt text](demo/disp_output.png)
 
 
 

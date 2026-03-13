@@ -5,10 +5,21 @@
 #include <NvInfer.h>
 #include <opencv2/core.hpp>
 #include "config.h"
-
-
+/**
+ * @brief TensorShape 结构体 - 封装张量形状信息
+ */
+struct TensorShape
+{
+    int n = 0; // Batch
+    int c = 0; // Channel
+    int d = 0; // Depth
+    int h = 0; // Height
+    int w = 0; // Width
+};
 namespace utility
 {
+
+    TensorShape vectorToShape(const std::vector<int> &vec);
 
     // for
     struct Defer
