@@ -291,7 +291,7 @@ int main(int argc, char *argv[])
 
         // Load model
         std::cout << "\nLoading TensorRT engine..." << std::endl;
-        TRTInfer model(engine_file);
+        auto model = TRTInfer::create(engine_file);
         std::cout << "Model loaded successfully!" << std::endl;
 
         // Setup video writer
@@ -356,7 +356,7 @@ int main(int argc, char *argv[])
             auto input_blob = LiteAnyStereo::preprocess(left_rgb_pad, right_rgb_pad, normalize_input);
 
             // Inference
-            auto output_blob = model(input_blob);
+            auto output_blob = (*model)(input_blob);
 
             // Get disparity output
             cv::Mat disparity;

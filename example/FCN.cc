@@ -93,15 +93,15 @@ int main(int argc, char *argv[])
     auto input_blob = FCN::preprocess(image);
 
     // model
-    TRTInfer model("fcn.engine");
+    auto model = TRTInfer::create("fcn.engine");
 
     // Run benchmark with warmup
     std::cout << "\n=== FCN Semantic Segmentation Benchmark ===" << std::endl;
-    Benchmark::runModel(model, input_blob, 10, 100);
+    Benchmark::runModel(*model, input_blob, 10, 100);
     std::cout << "\n=== Running single inference for visualization ===" << std::endl;
 
     // inference
-    auto output_blob = model(input_blob);
+    auto output_blob = (*model)(input_blob);
 
     // reshape 1x1x512x512 to 512 x 512
     cv::Mat mat2d = output_blob["output"].reshape(0, 512).clone();

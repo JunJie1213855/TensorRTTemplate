@@ -66,14 +66,14 @@ int main(int argc, char *argv[])
     auto input_blob = preprocess(left, right);
 
     // model
-    TRTInfer model("S2M2.engine");
+    auto model = TRTInfer::create("S2M2.engine");
 
     // Run benchmark with warmup
     std::cout << "\n=== S2M2 Stereo Matching Benchmark ===" << std::endl;
-    Benchmark::runModel(model, input_blob, 10, 100);
+    Benchmark::runModel(*model, input_blob, 10, 100);
     std::cout << "\n=== Running single inference for visualization ===" << std::endl;
 
-    auto output_blob = model(input_blob); // inference
+    auto output_blob = (*model)(input_blob); // inference
 
     cv::Mat dst, dst_conf;
     // post process

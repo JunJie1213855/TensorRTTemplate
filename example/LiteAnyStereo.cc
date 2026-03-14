@@ -315,20 +315,20 @@ int main(int argc, char *argv[])
         // Preprocess
         auto input_blob = LiteAnyStereo::preprocess(left_rgb_pad, right_rgb_pad, normalize_input);
 
-        // Load model
+        // Load model (使用工厂方法创建实例)
         std::cout << "\nLoading TensorRT engine..." << std::endl;
-        TRTInfer model(engine_file);
+        auto model = TRTInfer::create(engine_file);
 
         // Benchmark mode
         if (benchmark_mode)
         {
             std::cout << "\n=== Benchmark ===" << std::endl;
-            Benchmark::runModel(model, input_blob, warmup_runs, benchmark_runs);
+            Benchmark::runModel(*model, input_blob, warmup_runs, benchmark_runs);
             std::cout << "\n=== Running inference for output ===" << std::endl;
         }
 
         // Inference
-        auto output_blob = model(input_blob);
+        auto output_blob = (*model)(input_blob);
 
         // Get disparity output
         cv::Mat disparity;

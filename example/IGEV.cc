@@ -155,12 +155,12 @@ int main(int argc, char *argv[])
 
     OriginalSize orig_left, orig_right;
 
-    // 加载模型
-    TRTInfer model(engine_path);
+    // 加载模型 (使用工厂方法创建实例)
+    auto model = TRTInfer::create(engine_path);
 
     // 输出尺寸预备
-    std::vector<std::string> output_names = model.getOutputNames();
-    TensorShape outputshape = model.getOutputShape(output_names[0]);
+    std::vector<std::string> output_names = model->getOutputNames();
+    TensorShape outputshape = model->getOutputShape(output_names[0]);
 
     // 预处理
     auto input_blob = preprocess(left_path, right_path, orig_left, orig_right);
@@ -174,13 +174,13 @@ int main(int argc, char *argv[])
     std::cout << "\n=== Warmup (10 iterations) ===" << std::endl;
     for (int i = 0; i < 10; i++)
     {
-        model(input_blob);
+        (*model)(input_blob);
     }
 
     // 推理
     std::cout << "\n=== Running inference ===" << std::endl;
     auto start = std::chrono::high_resolution_clock::now();
-    auto output_blob = model(input_blob);
+    auto output_blob = (*model)(input_blob);
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     std::cout << "Inference time: " << duration.count() << " ms" << std::endl;

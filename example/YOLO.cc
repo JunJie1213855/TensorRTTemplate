@@ -114,15 +114,15 @@ int main(int argc, char *argv[])
     auto input_blob = YOLO::preprocess(image);
 
     // model
-    TRTInfer model("./yolov8n.engine");
+    auto model = TRTInfer::create("./yolov8n.engine");
 
     // Run benchmark with warmup
     std::cout << "\n=== YOLOv8 Object Detection Benchmark ===" << std::endl;
-    Benchmark::runModel(model, input_blob, 10, 100);
+    Benchmark::runModel(*model, input_blob, 10, 100);
     std::cout << "\n=== Running single inference for visualization ===" << std::endl;
 
     // inference
-    auto output_blob = model(input_blob);
+    auto output_blob = (*model)(input_blob);
 
     // post process
     cv::Mat result = YOLO::postprocess(output_blob["output0"], image, scale_factor);
