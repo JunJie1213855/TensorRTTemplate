@@ -31,7 +31,7 @@ namespace LiteAnyStereo
 
         cv::Mat img_padded;
         cv::copyMakeBorder(img, img_padded, pad_info.top, pad_info.bottom,
-                          pad_info.left, pad_info.right, cv::BORDER_REFLECT_101);
+                           pad_info.left, pad_info.right, cv::BORDER_REFLECT_101);
 
         return {img_padded, pad_info};
     }
@@ -51,8 +51,8 @@ namespace LiteAnyStereo
             int H = img.rows;
             int W = img.cols;
             return img(cv::Rect(pad_info.left, pad_info.top,
-                               W - pad_info.left - pad_info.right,
-                               H - pad_info.top - pad_info.bottom));
+                                W - pad_info.left - pad_info.right,
+                                H - pad_info.top - pad_info.bottom));
         }
 
         cv::Mat result;
@@ -95,16 +95,8 @@ namespace LiteAnyStereo
     {
         std::unordered_map<std::string, cv::Mat> input_blob;
 
-        if (normalize)
-        {
-            input_blob["left_image"] = cv::dnn::blobFromImage(left_rgb, 1.0 / 255.0, cv::Size(), cv::Scalar(), false, false);
-            input_blob["right_image"] = cv::dnn::blobFromImage(right_rgb, 1.0 / 255.0, cv::Size(), cv::Scalar(), false, false);
-        }
-        else
-        {
-            input_blob["left_image"] = cv::dnn::blobFromImage(left_rgb, 1.0, cv::Size(), cv::Scalar(), false, false);
-            input_blob["right_image"] = cv::dnn::blobFromImage(right_rgb, 1.0, cv::Size(), cv::Scalar(), false, false);
-        }
+        input_blob["left_image"] = cv::dnn::blobFromImage(left_rgb, 1.0, cv::Size(), cv::Scalar(), false, false);
+        input_blob["right_image"] = cv::dnn::blobFromImage(right_rgb, 1.0, cv::Size(), cv::Scalar(), false, false);
 
         return input_blob;
     }
@@ -163,7 +155,6 @@ namespace LiteAnyStereo
 
 } // namespace LiteAnyStereo
 
-
 void printUsage(const char *program_name)
 {
     std::cout << "Usage: " << program_name << " [options]\n"
@@ -184,7 +175,6 @@ void printUsage(const char *program_name)
               << "  " << program_name << " --left_img left.png --right_img right.png --engine model.engine\n"
               << std::endl;
 }
-
 
 int main(int argc, char *argv[])
 {
@@ -317,18 +307,44 @@ int main(int argc, char *argv[])
 
         // Load model
         std::cout << "\nLoading TensorRT engine..." << std::endl;
-        TRTInfer model(engine_file);
+        auto model = TRT::TRTInfer::create(engine_file, 4);
+        std::cout << "Model loaded successfully!" << std::endl;
 
         // Benchmark mode
         if (benchmark_mode)
         {
-            std::cout << "\n=== Benchmark ===" << std::endl;
-            Benchmark::runModel(model, input_blob, warmup_runs, benchmark_runs);
-            std::cout << "\n=== Running inference for output ===" << std::endl;
+            // 预热
+            std::cout << "\n=== Warmup ===" << std::endl;
+            std::vector<std::future<std::unordered_map<std::string, cv::Mat>>> warmup_results;
+            for (int i = 0; i < warmup_runs; i++)
+            {
+                warmup_results.emplace_back(model->PostQueue(input_blob));
+            }
+            for (auto &r : warmup_results)
+            {
+                r.get();
+            }
+
+            // 推理测试
+            std::cout << "\n=== Running inference ===" << std::endl;
+            std::vector<std::future<std::unordered_map<std::string, cv::Mat>>> results;
+            auto start = std::chrono::high_resolution_clock::now();
+            for (int i = 0; i < benchmark_runs; i++)
+            {
+                results.emplace_back(model->PostQueue(input_blob));
+            }
+            cv::Mat output;
+            for (auto &r : results)
+            {
+                output = r.get().begin()->second;
+            }
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+            std::cout << "Inference time: " << duration.count() / benchmark_runs << " ms" << std::endl;
         }
 
         // Inference
-        auto output_blob = model(input_blob);
+        auto output_blob = (*model)(input_blob);
 
         // Get disparity output
         cv::Mat disparity;

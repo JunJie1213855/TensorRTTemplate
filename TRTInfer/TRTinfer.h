@@ -18,14 +18,14 @@ namespace TRT
 
     class TRTInfer_API TRTInfer
     {
-
     public:
-        TRTInfer() = delete;
+        
 
-        /**
-         * @param engine_path The weight path of engine
-         */
-        TRTInfer(const std::string &engine_path, int num_thread = 1);
+        static std::shared_ptr<TRTInfer> create(const std::string &engine_path, int num_thread = 1);
+        
+
+        void Init();
+
 
         /**
          * @brief  Model inference based on OpenCV cv::Mat, calling the inner function internally
@@ -43,6 +43,14 @@ namespace TRT
 
         // 析构函数必须在 .cc 文件中定义
         ~TRTInfer();
+
+    private:
+        TRTInfer() = delete;
+
+        /**
+         * @param engine_path The weight path of engine
+         */
+        TRTInfer(const std::string &engine_path, int num_thread = 1);
 
     public:
         /**

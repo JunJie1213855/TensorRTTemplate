@@ -137,6 +137,9 @@ namespace TRT
         // 推理任务
         BlobType infer_task(const BlobType &input_blob);
 
+        // 确认初始化
+        void Initialized();
+
     public:
         // 公共 getter 方法（供 TRTInfer 公共接口使用）
         std::vector<std::string> getInputNames() const { return input_names_; }
@@ -158,9 +161,6 @@ namespace TRT
     private:
         // 线程工作队列
         void workThread();
-
-        // 确认初始化
-        bool ensureInitialized();
 
         // 私有方法 - 初始化  runtime、engine
         void LoadEngine(const std::string &engine_path); // 从文件加载 TensorRT 引擎
@@ -281,41 +281,32 @@ namespace TRT
     {
     }
 
-    bool TRTInfer::Impl::ensureInitialized()
+    void TRTInfer::Impl::Initialized()
     {
-        if (initialized_)
-            return true;
-        static std::once_flag init_flag_;
-        std::call_once(init_flag_, [this]()
-                       {
-                           try
-                           {
-                               // 按正确顺序初始化引擎和相关资源
-                               LoadEngine(engine_path_);
-                               getInputProperty();
-                               getOutputProperty();
-                               allocatePair();
-                               createWorkthreads();
-                               initialized_ = true;
-                           }
-                           catch (const std::exception &e)
-                           {
-                               std::cerr << e.what() << '\n';
-                               throw;
-                           }
-                       });
+        // runtime 和 engine
+        LoadEngine(engine_path_);
+
+        // 输入输出
+        getInputProperty();
+        getOutputProperty();
+
+        // 分配上下文
+        allocatePair();
+
+        // 工作线程
+        createWorkthreads();
     }
-    // 析构函数：释放所有 CUDA 资源
+
     TRTInfer::Impl::~Impl()
     {
-        std::cout << "[ TRT开始关闭 ]" << std::endl;
+        std::cout << "[TRTInfer::Impl] 开始关闭" << std::endl;
         // 设置停止标志
         b_stop_ = true;
         cond_.notify_all();
         // 等待线程结束
         for (auto &thread : thread_pool)
             thread.join();
-        std::cout << "[ TRT释放 ]" << std::endl;
+        std::cout << "[TRTInfer::Impl] 释放" << std::endl;
     }
 
     // 从文件加载 TensorRT 引擎并进行反序列化
@@ -326,7 +317,7 @@ namespace TRT
         if (!file.good())
         {
             file.close();
-            std::cerr << "Error reading engine file" << std::endl;
+            std::cerr << "[TRTInfer::Impl] " << "Error reading engine file" << std::endl;
             throw std::runtime_error("Error reading engine file: " + engine_path);
         }
         // 获取文件大小
@@ -342,7 +333,7 @@ namespace TRT
         runtime_.reset(nvinfer1::createInferRuntime(logger));
         if (!runtime_)
         {
-            std::cerr << "Failed to create runtime" << std::endl;
+            std::cerr << "[TRTInfer::Impl] " << "Failed to create runtime" << std::endl;
             throw std::runtime_error("Failed to create TensorRT runtime");
         }
 
@@ -352,7 +343,7 @@ namespace TRT
         engine_.reset(runtime_->deserializeCudaEngine(engineData.data(), fsize));
         if (!engine_)
         {
-            std::cerr << "Failed to create engine" << std::endl;
+            std::cerr << "[TRTInfer::Impl] " << "Failed to create engine" << std::endl;
             throw std::runtime_error("Failed to deserialize TensorRT engine");
         }
     }
@@ -368,7 +359,7 @@ namespace TRT
             if (engine_->getTensorIOMode(name) == nvinfer1::TensorIOMode::kINPUT)
             {
                 // 打印张量信息
-                std::cout << "input tensor name : " << name
+                std::cout << "[TRTInfer::Impl] " << "input tensor name : " << name
                           << ", tensor shape : " << engine_->getTensorShape(name)
                           << ", tensor type : " << engine_->getTensorDataType(name)
                           << ", tensor format : " << engine_->getTensorFormatDesc(name)
@@ -400,7 +391,7 @@ namespace TRT
             if (engine_->getTensorIOMode(name) == nvinfer1::TensorIOMode::kOUTPUT)
             {
                 // 打印张量信息
-                std::cout << "output tensor name : " << name
+                std::cout << "[TRTInfer::Impl] " << "output tensor name : " << name
                           << ", tensor shape : " << engine_->getTensorShape(name)
                           << ", tensor type : " << engine_->getTensorDataType(name)
                           << ", tensor format : " << engine_->getTensorFormatDesc(name)
@@ -425,13 +416,19 @@ namespace TRT
         // 在设备端预分配输入、输出缓冲区
         for (int i = 0; i < input_names_.size(); i++)
         {
-            inputBindings[input_names_[i]] = utility::safeCudaMalloc(input_size_[input_names_[i]]);  // 输入
+            void *ptr = utility::safeCudaMalloc(input_size_[input_names_[i]]);
+            if (!ptr)
+                throw std::runtime_error("Failed to allocate GPU memory");
+            inputBindings[input_names_[i]] = ptr;                                                    // 输入
             context->setInputTensorAddress(input_names_[i].c_str(), inputBindings[input_names_[i]]); // 上下文绑定地址
         }
         // 为每个输出张量分配显存
         for (int i = 0; i < output_names_.size(); i++)
         {
-            outputBindings[output_names_[i]] = utility::safeCudaMalloc(output_size_[output_names_[i]]);  // 输出
+            void *ptr = utility::safeCudaMalloc(output_size_[output_names_[i]]);
+            if (!ptr)
+                throw std::runtime_error("Failed to allocate GPU memory");
+            outputBindings[output_names_[i]] = ptr;                                                      // 输出
             context->setOutputTensorAddress(output_names_[i].c_str(), outputBindings[output_names_[i]]); // 上下文绑定地址
         }
     }
@@ -534,7 +531,7 @@ namespace TRT
         size_t mat_size = cpu_ptr.total() * cpu_ptr.elemSize();
         if (data_size != mat_size)
         {
-            std::cerr << "[ERROR] Input tensor size mismatch for '" << name << "': "
+            std::cerr << "[TRTInfer::Impl - ERROR] Input tensor size mismatch for '" << name << "': "
                       << "required " << data_size << " bytes, "
                       << "but cv::Mat has " << mat_size << " bytes. "
                       << "Mat shape: " << cpu_ptr.size[0] << "x" << cpu_ptr.size[1] << "x" << cpu_ptr.size[2] << "x" << cpu_ptr.size[3]
@@ -544,20 +541,20 @@ namespace TRT
                 std::cerr << current_input_shapes_.at(name)[i] << (i < current_input_shapes_.at(name).size() - 1 ? "x" : "");
             }
             std::cerr << std::endl;
-            throw std::runtime_error("Input tensor size mismatch");
+            throw std::runtime_error("[TRTInfer::Impl] Input tensor size mismatch");
         }
 
         // 检查连续性
         if (!cpu_ptr.isContinuous())
         {
-            std::cerr << "[WARNING] Input cv::Mat for '" << name << "' is not continuous" << std::endl;
+            std::cerr << "[TRTInfer::Impl - WARNING] Input cv::Mat for '" << name << "' is not continuous" << std::endl;
         }
 
         // 拷贝至 GPU
         cudaError_t err = cudaMemcpyAsync(cuda_ptr, cpu_ptr.data, data_size, cudaMemcpyHostToDevice, stream);
         if (err != cudaSuccess)
         {
-            std::cerr << "CUDA memcpyAsync failed: " << cudaGetErrorString(err) << std::endl;
+            std::cerr << "[TRTInfer::Impl] " << "CUDA memcpyAsync failed: " << cudaGetErrorString(err) << std::endl;
             throw std::runtime_error(cudaGetErrorString(err));
         }
         context->setInputTensorAddress(name.c_str(), cuda_ptr);
@@ -590,7 +587,7 @@ namespace TRT
             cudaError_t err = cudaMemcpyAsync(ptr, OutputBindings[name], actual_size, cudaMemcpyDeviceToHost, stream);
             if (err != cudaSuccess)
             {
-                std::cerr << "CUDA memcpyAsync failed: " << cudaGetErrorString(err) << std::endl;
+                std::cerr << "[TRTInfer::Impl] " << "CUDA memcpyAsync failed: " << cudaGetErrorString(err) << std::endl;
                 throw std::runtime_error(cudaGetErrorString(err));
             }
         }
@@ -598,8 +595,6 @@ namespace TRT
 
     std::future<BlobType> TRTInfer::Impl::PostQueue(const BlobType &input_blob)
     {
-        // 确认已经初始化
-        ensureInitialized();
         // 创建任务
         auto task = std::make_unique<InferTask>(
             std::bind(&TRTInfer::Impl::infer_task, this, std::placeholders::_1), static_cast<const BlobType &>(input_blob));
@@ -641,7 +636,7 @@ namespace TRT
                 }
                 catch (const std::exception &e)
                 {
-                    std::cerr << "Task execution failed: " << e.what() << "\n";
+                    std::cerr << "[TRTInfer::Impl] " << "Task execution failed: " << e.what() << "\n";
                 }
             }
         }
@@ -662,5 +657,17 @@ namespace TRT
         for (int i = 0; i < num_threads_; i++)
             thread_pool.emplace_back([this]()
                                      { workThread(); });
+    }
+
+    void TRTInfer::Init()
+    {
+        pImpl->Initialized();
+    }
+    std::shared_ptr<TRTInfer> TRTInfer::create(const std::string &engine_path, int num_thread)
+    {
+        auto instance_ = std::shared_ptr<TRTInfer>(new TRTInfer(engine_path, num_thread));
+        // 初始化
+        instance_->Init();
+        return instance_;
     }
 }

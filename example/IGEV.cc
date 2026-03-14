@@ -159,11 +159,11 @@ int main(int argc, char *argv[])
 
 
     // 加载模型
-    TRTInfer model(engine_path, 4);
+    auto model =  TRT::TRTInfer::create(engine_path, 4);
 
     // 输出尺寸预备
-    std::vector<std::string> output_names = model.getOutputNames();
-    TensorShape outputshape = model.getOutputShape(output_names[0]);
+    std::vector<std::string> output_names = model->getOutputNames();
+    TensorShape outputshape = model->getOutputShape(output_names[0]);
 
     // 预处理
     for(int i = 0; i < warmup_times; i++){
@@ -186,7 +186,7 @@ int main(int argc, char *argv[])
     std::vector<std::future<std::unordered_map<std::string, cv::Mat>>> results;
     for (auto& warm_blob : warmup_inputblobs)
     {
-        results.emplace_back(model.PostQueue(warm_blob));
+        results.emplace_back(model->PostQueue(warm_blob));
     }
     for (auto &result : results)
     {
@@ -198,7 +198,7 @@ int main(int argc, char *argv[])
     auto start = std::chrono::high_resolution_clock::now();
     for (auto& test_blob : test_inputblobs)
     {
-        results.emplace_back(model.PostQueue(test_blob));
+        results.emplace_back(model->PostQueue(test_blob));
     }
     cv::Mat r;
     for (auto &result : results)

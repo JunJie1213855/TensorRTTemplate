@@ -96,12 +96,20 @@ namespace YOLO
 
 int main(int argc, char *argv[])
 {
-    // image
-    cv::Mat image = cv::imread("./demo/bus.jpg");
+    // 路径配置
+    std::string image_path = "./demo/bus.jpg";
+    std::string engine_path = "./yolov8n.engine";
+    int warmup_times = 10;
+    int test_times = 100;
 
+    // 加载模型 (使用工厂方法，延迟初始化)
+    auto model = TRT::TRTInfer::create(engine_path, 4);
+
+    // 加载图像
+    cv::Mat image = cv::imread(image_path);
     if (image.empty())
     {
-        std::cerr << "Error: Could not load image from ./demo/bus.jpg" << std::endl;
+        std::cerr << "Error: Could not load image from " << image_path << std::endl;
         return -1;
     }
 
@@ -110,24 +118,49 @@ int main(int argc, char *argv[])
     float scaleh = static_cast<float>(image.size().height) / 640.f;
     cv::Size2f scale_factor(scalew, scaleh);
 
-    // preprocess
-    auto input_blob = YOLO::preprocess(image);
+    // 预处理
+    std::vector<std::unordered_map<std::string, cv::Mat>> warmup_blobs;
+    std::vector<std::unordered_map<std::string, cv::Mat>> test_blobs;
+    for (int i = 0; i < warmup_times; i++) {
+        warmup_blobs.emplace_back(YOLO::preprocess(image));
+    }
+    for (int i = 0; i < test_times; i++) {
+        test_blobs.emplace_back(YOLO::preprocess(image));
+    }
 
-    // model
-    TRTInfer model("./yolov8n.engine");
+    // 预热
+    std::cout << "\n=== Warmup ===" << std::endl;
+    std::vector<std::future<std::unordered_map<std::string, cv::Mat>>> results;
+    for (auto& blob : warmup_blobs) {
+        results.emplace_back(model->PostQueue(blob));
+    }
+    for (auto& result : results) {
+        result.get();
+    }
+    results.clear();
 
-    // Run benchmark with warmup
-    std::cout << "\n=== YOLOv8 Object Detection Benchmark ===" << std::endl;
-    Benchmark::runModel(model, input_blob, 10, 100);
-    std::cout << "\n=== Running single inference for visualization ===" << std::endl;
-
-    // inference
-    auto output_blob = model(input_blob);
+    // 推理测试
+    std::cout << "\n=== Running inference ===" << std::endl;
+    auto start = std::chrono::high_resolution_clock::now();
+    for (auto& blob : test_blobs) {
+        results.emplace_back(model->PostQueue(blob));
+    }
+    cv::Mat output;
+    for (auto& result : results) {
+        output = result.get()["output0"];
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cout << "Inference time: " << duration.count() / test_times << " ms" << std::endl;
 
     // post process
-    cv::Mat result = YOLO::postprocess(output_blob["output0"], image, scale_factor);
+    cv::Mat result = YOLO::postprocess(output, image, scale_factor);
 
-    // show result
+    // 保存结果
+    cv::imwrite("./demo/yolo_output.png", result);
+    std::cout << "Saved output to yolo_output.png" << std::endl;
+
+    // 显示
     cv::imshow("output", result);
     cv::waitKey();
 

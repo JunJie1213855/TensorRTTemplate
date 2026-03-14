@@ -53,8 +53,18 @@ void postprocess(const cv::Mat &disp, cv::Mat &disp_vis)
 
 int main(int argc, char *argv[])
 {
-    cv::Mat left = cv::imread("rect_left.png");
-    cv::Mat right = cv::imread("rect_right.png");
+    // 路径配置
+    std::string left_path = "rect_left.png";
+    std::string right_path = "rect_right.png";
+    std::string engine_path = "S2M2.engine";
+    int warmup_times = 10;
+    int test_times = 100;
+
+    // 加载模型
+    auto model = TRT::TRTInfer::create(engine_path, 4);
+
+    cv::Mat left = cv::imread(left_path);
+    cv::Mat right = cv::imread(right_path);
 
     if (left.empty() || right.empty())
     {
@@ -62,25 +72,49 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    // preprocess
-    auto input_blob = preprocess(left, right);
+    // 预处理
+    std::vector<std::unordered_map<std::string, cv::Mat>> warmup_blobs;
+    std::vector<std::unordered_map<std::string, cv::Mat>> test_blobs;
+    for (int i = 0; i < warmup_times; i++) {
+        warmup_blobs.emplace_back(preprocess(left, right));
+    }
+    for (int i = 0; i < test_times; i++) {
+        test_blobs.emplace_back(preprocess(left, right));
+    }
 
-    // model
-    TRTInfer model("S2M2.engine");
+    // 预热
+    std::cout << "\n=== Warmup ===" << std::endl;
+    std::vector<std::future<std::unordered_map<std::string, cv::Mat>>> results;
+    for (auto& blob : warmup_blobs) {
+        results.emplace_back(model->PostQueue(blob));
+    }
+    for (auto& result : results) {
+        result.get();
+    }
+    results.clear();
 
-    // Run benchmark with warmup
-    std::cout << "\n=== S2M2 Stereo Matching Benchmark ===" << std::endl;
-    Benchmark::runModel(model, input_blob, 10, 100);
-    std::cout << "\n=== Running single inference for visualization ===" << std::endl;
-
-    auto output_blob = model(input_blob); // inference
+    // 推理测试
+    std::cout << "\n=== Running inference ===" << std::endl;
+    auto start = std::chrono::high_resolution_clock::now();
+    for (auto& blob : test_blobs) {
+        results.emplace_back(model->PostQueue(blob));
+    }
+    cv::Mat output;
+    for (auto& result : results) {
+        output = result.get()["output_disp"];
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cout << "Inference time: " << duration.count() / test_times << " ms" << std::endl;
 
     cv::Mat dst, dst_conf;
     // post process
-    postprocess(output_blob["output_disp"].reshape(1, 736), dst);
-    postprocess(output_blob["output_conf"].reshape(1, 736), dst_conf);
+    postprocess(output.reshape(1, 736), dst);
+    // 保存结果
+    cv::imwrite("./demo/s2m2_disp.png", dst);
+    std::cout << "Saved disparity to s2m2_disp.png" << std::endl;
+
     cv::imshow("disp", dst);
-    cv::imshow("disp conf", dst_conf);
     cv::waitKey();
     return 0;
 }

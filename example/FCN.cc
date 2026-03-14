@@ -83,31 +83,61 @@ namespace FCN
 
 int main(int argc, char *argv[])
 {
+    // 路径配置
+    std::string image_path = "demo/bus.jpg";
+    std::string engine_path = "fcn.engine";
+    int warmup_times = 10;
+    int test_times = 100;
+
+    // 加载模型
+    auto model = TRT::TRTInfer::create(engine_path, 4);
+
     // image
-    cv::Mat image = cv::imread("demo/bus.jpg");
+    cv::Mat image = cv::imread(image_path);
 
     if (image.empty())
     {
-        std::cerr << "Error: Could not load image from demo/bus.jpg" << std::endl;
+        std::cerr << "Error: Could not load image from " << image_path << std::endl;
         return -1;
     }
 
-    // preprocess
-    auto input_blob = FCN::preprocess(image);
+    // 预处理
+    std::vector<std::unordered_map<std::string, cv::Mat>> warmup_blobs;
+    std::vector<std::unordered_map<std::string, cv::Mat>> test_blobs;
+    for (int i = 0; i < warmup_times; i++) {
+        warmup_blobs.emplace_back(FCN::preprocess(image));
+    }
+    for (int i = 0; i < test_times; i++) {
+        test_blobs.emplace_back(FCN::preprocess(image));
+    }
 
-    // model
-    TRTInfer model("fcn.engine");
+    // 预热
+    std::cout << "\n=== Warmup ===" << std::endl;
+    std::vector<std::future<std::unordered_map<std::string, cv::Mat>>> results;
+    for (auto& blob : warmup_blobs) {
+        results.emplace_back(model->PostQueue(blob));
+    }
+    for (auto& result : results) {
+        result.get();
+    }
+    results.clear();
 
-    // Run benchmark with warmup
-    std::cout << "\n=== FCN Semantic Segmentation Benchmark ===" << std::endl;
-    Benchmark::runModel(model, input_blob, 10, 100);
-    std::cout << "\n=== Running single inference for visualization ===" << std::endl;
-
-    // inference
-    auto output_blob = model(input_blob);
+    // 推理测试
+    std::cout << "\n=== Running inference ===" << std::endl;
+    auto start = std::chrono::high_resolution_clock::now();
+    for (auto& blob : test_blobs) {
+        results.emplace_back(model->PostQueue(blob));
+    }
+    cv::Mat output;
+    for (auto& result : results) {
+        output = result.get()["output"];
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cout << "Inference time: " << duration.count() / test_times << " ms" << std::endl;
 
     // reshape 1x1x512x512 to 512 x 512
-    cv::Mat mat2d = output_blob["output"].reshape(0, 512).clone();
+    cv::Mat mat2d = output.reshape(0, 512).clone();
 
     // convert unsigned char type
     mat2d.convertTo(mat2d, CV_8U);
@@ -119,6 +149,11 @@ int main(int argc, char *argv[])
 
     // for mask
     cv::addWeighted(image_512, 0.7, viz, 0.3, 0, mask);
+
+    // 保存结果
+    cv::imwrite("./demo/fcn_output.png", viz);
+    cv::imwrite("./demo/fcn_mask.png", mask);
+    std::cout << "Saved outputs to fcn_output.png and fcn_mask.png" << std::endl;
 
     // show result
     cv::imshow("output", viz);
