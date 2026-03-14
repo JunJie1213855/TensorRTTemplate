@@ -83,15 +83,15 @@ std::unordered_map<std::string, cv::Mat> preprocess(const std::string &left_path
                                                     OriginalSize &orig_right)
 {
     // 目标尺寸 (与 Python 代码一致: 480x752)
-    cv::Size target_size(752, 480);
+    // cv::Size target_size(752, 480);
 
     // 加载并预处理图像
     cv::Mat left_blob = loadImage(left_path);
     cv::Mat right_blob = loadImage(right_path);
 
     // 有目标尺寸就修改
-    cv::resize(left_blob, left_blob, target_size);
-    cv::resize(right_blob, right_blob, target_size);
+    // cv::resize(left_blob, left_blob, target_size);
+    // cv::resize(right_blob, right_blob, target_size);
 
     // 填充到 32 的倍数
     cv::Mat left_padded = padImage(left_blob, orig_left);
@@ -143,43 +143,50 @@ void postprocess(const cv::Mat &disp, const OriginalSize &orig_size, cv::Mat &di
 int main(int argc, char *argv[])
 {
     // 图像路径
-    std::string left_path = "./demo/left.png";
-    std::string right_path = "./demo/right.png";
+    std::string left_path = "/root/code/C++/TensorRTTemplate/demo/left.png";
+    std::string right_path = "/root/code/C++/TensorRTTemplate/demo/right.png";
     std::string engine_path = "/root/code/python/StereoMatch/StereoAlgorithms/IGEV-Stereo/model_480_752.engine";
 
-    // 加载图像
-    cv::Mat left = cv::imread(left_path);
-    cv::Mat right = cv::imread(right_path);
-
-    if (left.empty() || right.empty())
-    {
-        std::cerr << "Error: Could not load images" << std::endl;
-        return -1;
-    }
-
+    int warmup_times = 100;
+    int test_times = 100;
+    
+    std::vector<std::unordered_map<std::string, cv::Mat>> warmup_inputblobs;
+    std::vector<std::unordered_map<std::string, cv::Mat>> test_inputblobs;
+    
     OriginalSize orig_left, orig_right;
 
+
+
+
     // 加载模型
-    TRTInfer model(engine_path, 8);
+    TRTInfer model(engine_path, 4);
 
     // 输出尺寸预备
     std::vector<std::string> output_names = model.getOutputNames();
     TensorShape outputshape = model.getOutputShape(output_names[0]);
 
     // 预处理
-    auto input_blob = preprocess(left_path, right_path, orig_left, orig_right);
+    for(int i = 0; i < warmup_times; i++){
+        warmup_inputblobs.emplace_back(preprocess(left_path, right_path, orig_left, orig_right));
+    }
+    for(int i = 0; i < test_times; i++){
+        test_inputblobs.emplace_back(preprocess(left_path, right_path, orig_left, orig_right));
+    }
 
-    // 打印输入信息
-    std::cout << "Input shape - left: " << input_blob["left"].size << " (d=" << input_blob["left"].size.p[0]
-              << ", c=" << input_blob["left"].size.p[1]
-              << ", h=" << input_blob["left"].size.p[2]
-              << ", w=" << input_blob["left"].size.p[3] << ")" << std::endl;
+    // auto input_blob = preprocess(left_path, right_path, orig_left, orig_right);
+    // std::cout << "left address : "<< static_cast<void*>(input_blob["left"].data)  << std::endl;
+
+    // // 打印输入信息
+    // std::cout << "Input shape - left: " << input_blob["left"].size << " (d=" << input_blob["left"].size.p[0]
+    //           << ", c=" << input_blob["left"].size.p[1]
+    //           << ", h=" << input_blob["left"].size.p[2]
+    //           << ", w=" << input_blob["left"].size.p[3] << ")" << std::endl;
     // 预热
-    std::cout << "\n=== Warmup (10 iterations) ===" << std::endl;
+    std::cout << "\n=== Warmup ===" << std::endl;
     std::vector<std::future<std::unordered_map<std::string, cv::Mat>>> results;
-    for (int i = 0; i < 10; i++)
+    for (auto& warm_blob : warmup_inputblobs)
     {
-        results.emplace_back(model.PostQueue(input_blob));
+        results.emplace_back(model.PostQueue(warm_blob));
     }
     for (auto &result : results)
     {
@@ -189,9 +196,9 @@ int main(int argc, char *argv[])
     // 推理
     std::cout << "\n=== Running inference ===" << std::endl;
     auto start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < 100; i++)
+    for (auto& test_blob : test_inputblobs)
     {
-        results.emplace_back(model.PostQueue(input_blob));
+        results.emplace_back(model.PostQueue(test_blob));
     }
     cv::Mat r;
     for (auto &result : results)

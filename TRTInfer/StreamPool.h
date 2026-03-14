@@ -32,10 +32,12 @@ struct StreamContextPair
      *      pair = pool.acquire();
      *      if(!pair) return false;
      */
-    bool operator()()
+    bool operator!() const
     {
         return stream == nullptr || context == nullptr;
     }
+
+
 };
 
 /**

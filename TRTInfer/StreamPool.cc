@@ -44,6 +44,7 @@ void StreamPool::init(nvinfer1::ICudaEngine *engine, int num_streams)
         // 创建 ExecutionContext（使用裸指针，StreamPool 管理生命周期）
         pair.context = createContext(engine_);
 
+        // 移动语义
         pool_.push(std::move(pair));
     }
 
@@ -68,6 +69,7 @@ nvinfer1::IExecutionContext *StreamPool::createContext(nvinfer1::ICudaEngine *en
  */
 StreamPool::~StreamPool()
 {
+    std::cout << "[StreamPool] Shutdown" << std::endl;
     shutdown();
 
     // 销毁所有配对
